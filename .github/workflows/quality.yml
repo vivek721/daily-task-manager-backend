@@ -1,0 +1,257 @@
+name: Code Quality & Performance
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run weekly quality checks on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+
+jobs:
+  # Comprehensive code quality analysis
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule' # Skip for scheduled runs
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Shallow clones should be disabled for better analysis
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run tests with coverage
+        run: npm run test:coverage
+        env:
+          NODE_ENV: test
+          
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # Performance benchmarking
+  performance:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: perf_test_user
+          POSTGRES_PASSWORD: perf_test_password
+          POSTGRES_DB: perf_test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build application
+        run: npm run build
+        
+      - name: Start application in background
+        run: |
+          npm start &
+          sleep 10 # Wait for app to start
+        env:
+          DATABASE_URL: postgresql://perf_test_user:perf_test_password@localhost:5432/perf_test_db
+          JWT_SECRET: perf-test-secret
+          SESSION_SECRET: perf-session-secret
+          GOOGLE_CLIENT_ID: perf-client-id
+          GOOGLE_CLIENT_SECRET: perf-client-secret
+          
+      - name: Run performance tests
+        run: |
+          # Install artillery for load testing
+          npm install -g artillery@latest
+          
+          # Create basic performance test
+          cat > performance-test.yml << EOF
+          config:
+            target: 'http://localhost:3001'
+            phases:
+              - duration: 60
+                arrivalRate: 10
+          scenarios:
+            - name: "Health check performance"
+              requests:
+                - get:
+                    url: "/health"
+          EOF
+          
+          # Run performance test
+          artillery run performance-test.yml --output performance-report.json
+          artillery report performance-report.json --output performance-report.html
+          
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-report
+          path: performance-report.html
+
+  # Code complexity analysis
+  complexity:
+    name: Code Complexity Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Install complexity analysis tools
+        run: |
+          npm install -g plato typescript-complexity-report
+          
+      - name: Generate complexity report
+        run: |
+          # Generate complexity report for TypeScript files
+          mkdir -p reports/complexity
+          
+          # Use plato for complexity analysis
+          plato -r -d reports/complexity src/**/*.ts
+          
+          # Generate TypeScript complexity report
+          typescript-complexity-report --output reports/complexity/ts-complexity.json src/**/*.ts || true
+          
+      - name: Upload complexity report
+        uses: actions/upload-artifact@v4
+        with:
+          name: complexity-report
+          path: reports/complexity
+
+  # Bundle size analysis
+  bundle-analysis:
+    name: Bundle Size Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build application
+        run: npm run build
+        
+      - name: Analyze bundle size
+        run: |
+          # Install bundle analysis tools
+          npm install -g bundlesize
+          
+          # Calculate and display bundle sizes
+          echo "## Bundle Size Analysis" > bundle-report.md
+          echo "Generated on: $(date -u)" >> bundle-report.md
+          echo "" >> bundle-report.md
+          
+          # Analyze dist folder
+          find dist -name "*.js" -exec ls -lh {} \; | awk '{print "- " $9 ": " $5}' >> bundle-report.md
+          
+          # Calculate total size
+          total_size=$(du -sh dist | cut -f1)
+          echo "" >> bundle-report.md
+          echo "**Total bundle size: $total_size**" >> bundle-report.md
+          
+          cat bundle-report.md
+          
+      - name: Upload bundle analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-analysis
+          path: bundle-report.md
+
+  # Weekly quality summary
+  quality-summary:
+    name: Weekly Quality Summary
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    needs: [performance, complexity, bundle-analysis]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Download all reports
+        uses: actions/download-artifact@v4
+        
+      - name: Generate quality summary
+        run: |
+          echo "# Weekly Code Quality Summary" > quality-summary.md
+          echo "Generated on: $(date -u)" >> quality-summary.md
+          echo "" >> quality-summary.md
+          
+          echo "## Performance Metrics" >> quality-summary.md
+          echo "- Performance report generated and available in artifacts" >> quality-summary.md
+          echo "" >> quality-summary.md
+          
+          echo "## Code Complexity" >> quality-summary.md
+          echo "- Complexity analysis completed and available in artifacts" >> quality-summary.md
+          echo "" >> quality-summary.md
+          
+          echo "## Bundle Size" >> quality-summary.md
+          if [ -f bundle-analysis/bundle-report.md ]; then
+            cat bundle-analysis/bundle-report.md >> quality-summary.md
+          fi
+          echo "" >> quality-summary.md
+          
+          echo "---" >> quality-summary.md
+          echo "*This summary was automatically generated by the weekly quality workflow.*" >> quality-summary.md
+          
+      - name: Create quality summary issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = fs.readFileSync('quality-summary.md', 'utf8');
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `📊 Weekly Code Quality Summary - ${new Date().toISOString().split('T')[0]}`,
+              body: body,
+              labels: ['quality', 'weekly-report', 'automated']
+            });

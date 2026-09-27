@@ -15,7 +15,7 @@ Frontend (React 18 + TypeScript + Redux Toolkit): [vivek721/daily-task-manager-f
 - **Soft delete**: deleted tasks can be listed, restored, or permanently removed. `scripts/cleanup-deleted-tasks.js` purges tasks soft-deleted more than a day ago.
 - **Rule-based task assignment**: when a task is created, assignment rules (`equals`, `contains`, `starts_with`, `ends_with`, `matches_regex` on task fields) are evaluated in priority order and the task is assigned to an eligible subagent. PostgreSQL triggers keep each subagent's load and busy/active status up to date.
 - **Request validation** for task payloads and task IDs (UUID format).
-- **Security middleware**: Helmet headers, CORS restricted to `FRONTEND_URL` with credentials, parameterized SQL queries throughout.
+- **Security middleware**: Helmet headers, CORS restricted to `FRONTEND_URL`, parameterized SQL queries throughout, and per-IP rate limiting (`express-rate-limit`): 100 requests per 15 minutes on every `/api` route, plus 10 per 15 minutes on sign-up, sign-in, dev-login and token verification. No session cookies: auth is a stateless JWT.
 - **Operations**: `/health` endpoint, centralized error handler, Morgan request logging, and a Docker image that runs as a non-root user with a container `HEALTHCHECK`.
 
 ## Tech stack
@@ -24,8 +24,8 @@ Frontend (React 18 + TypeScript + Redux Toolkit): [vivek721/daily-task-manager-f
 |------|-------|
 | Runtime / framework | Node.js 18+, Express 5, TypeScript 5 (strict mode) |
 | Database | PostgreSQL via `pg` (connection pool, raw parameterized SQL) |
-| Auth | Passport + Google OAuth 2.0, `jsonwebtoken`, `bcryptjs`, `express-session` |
-| Security / logging | Helmet, CORS, Morgan |
+| Auth | Passport + Google OAuth 2.0 (stateless), `jsonwebtoken`, `bcryptjs` |
+| Security / logging | Helmet, CORS, `express-rate-limit`, Morgan |
 | Testing | Jest, ts-jest, Supertest |
 | Code quality | ESLint (`@typescript-eslint`, `eslint-plugin-security`), Prettier |
 | Delivery | Docker, GitHub Actions |
@@ -37,7 +37,8 @@ src/
 ├── index.ts                 # App setup: middleware, routes, DB init, server start
 ├── config/
 │   ├── database.ts          # pg Pool + creates the tasks table on startup
-│   └── passport.ts          # Google OAuth strategy, session (de)serialization
+│   ├── env.ts               # required-secret check run at startup
+│   └── passport.ts          # Google OAuth strategy (no sessions)
 ├── routes/                  # authRoutes, taskRoutes, subagentRoutes
 ├── controllers/             # Request handlers for auth, tasks, subagents
 ├── models/                  # SQL data access: User, Task, Subagent
@@ -53,7 +54,7 @@ Layering is routes -> controllers -> models, where models are classes that run S
 **Google sign-in flow**
 
 1. The frontend sends the browser to `GET /api/auth/google`.
-2. Google redirects back to `GET /api/auth/google/callback`. Passport finds or creates the user by Google ID and refreshes their name, email and picture.
+2. Google redirects back to `GET /api/auth/google/callback`. Passport finds or creates the user by Google ID and refreshes their name, email and picture. No server session is created (`session: false`).
 3. The API signs a JWT (`userId`, `email`, `name`; default expiry 7 days) and redirects to `${FRONTEND_URL}/auth/callback?token=<jwt>`.
 4. The frontend sends `Authorization: Bearer <jwt>` on later requests. `authenticateToken` verifies the token, loads the user, and attaches it to `req.user`.
 
@@ -71,10 +72,10 @@ Local sign-up and sign-in return the same kind of JWT in the JSON response.
 | GET | `/google/callback` | - | OAuth callback; redirects to frontend with JWT |
 | POST | `/signup` | - | Create a local account (`username`, `email`, `name`, `password`) and return a JWT |
 | POST | `/signin` | - | Sign in with `username` and `password` and return a JWT |
-| POST | `/verify` | Bearer token | Check a token and return its decoded user |
+| POST | `/verify` | Bearer token | Check a token and return its decoded user (auth rate limit) |
 | GET | `/profile` | JWT | Current user's profile |
-| POST | `/logout` | - | Ends the Passport session |
-| POST | `/dev-login` | - | Development only: finds or creates a local `dev-user` account (no password) and returns a JWT for it. Returns 404 unless `NODE_ENV=development` |
+| POST | `/logout` | - | Returns success. Tokens are stateless, so the client logs out by discarding its JWT |
+| POST | `/dev-login` | - | Development only: finds or creates a local `dev-user` account (no password) and returns a JWT for it. Returns 404 unless `NODE_ENV=development` (auth rate limit) |
 
 ### Tasks (`/api/tasks`), all JWT
 
@@ -152,17 +153,19 @@ These are the variables the code reads:
 | Variable | Used for | Default if unset |
 |----------|----------|------------------|
 | `PORT` | HTTP port | `3001` |
-| `NODE_ENV` | `production` makes session cookies secure; `development` enables `/dev-login` and adds stack traces to error responses | `development` (but `/dev-login` requires it to be set explicitly) |
+| `NODE_ENV` | `production` refuses to start without a real `JWT_SECRET`; `development` enables `/dev-login` and adds stack traces to error responses | `development` (but `/dev-login` requires it to be set explicitly) |
 | `FRONTEND_URL` | CORS origin and OAuth redirect target | `http://localhost:5173` for CORS; OAuth redirects need it set |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | PostgreSQL connection used by the API | `localhost`, `5432`, `daily_task_manager`, `postgres`, `password` |
 | `DATABASE_URL` | Used only by `scripts/cleanup-deleted-tasks.js` (falls back to the `DB_*` values) | - |
-| `JWT_SECRET` | Signing and verifying JWTs | **required** |
+| `JWT_SECRET` | Signing and verifying JWTs | **required**. In production the app refuses to start if it is unset or still the `.env.example` placeholder; elsewhere it logs a warning |
 | `JWT_EXPIRE` | JWT lifetime | `7d` |
-| `SESSION_SECRET` | express-session signing | insecure placeholder, so always set it |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client | **required** (the Google strategy is registered at startup) |
 | `GOOGLE_CALLBACK_URL` | OAuth callback URL | `/api/auth/google/callback` |
+| `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX_REQUESTS` | Per-IP limit for every `/api` route | `900000` (15 min), `100` |
+| `AUTH_RATE_LIMIT_WINDOW_MS`, `AUTH_RATE_LIMIT_MAX_REQUESTS` | Stricter per-IP limit for `/signup`, `/signin`, `/dev-login`, `/verify` (on top of the general one) | `RATE_LIMIT_WINDOW_MS`, `10` |
+| `TRUST_PROXY` | Express `trust proxy` (e.g. `1`). Set it behind a reverse proxy or load balancer, otherwise every client shares the proxy's IP and rate-limit bucket | unset |
 
-`.env.example` also lists `BCRYPT_ROUNDS`, `JWT_EXPIRES_IN`, `RATE_LIMIT_*`, `LOG_LEVEL` and `LOG_FORMAT`. The code does not read them yet. Use `JWT_EXPIRE`, not `JWT_EXPIRES_IN`, to change token lifetime.
+Rate limits are skipped when `NODE_ENV=test`. `.env.example` also lists `BCRYPT_ROUNDS`, `JWT_EXPIRES_IN`, `LOG_LEVEL` and `LOG_FORMAT`. The code does not read them yet. Use `JWT_EXPIRE`, not `JWT_EXPIRES_IN`, to change token lifetime.
 
 ### 3. Set up Google OAuth
 
@@ -226,6 +229,10 @@ Jest + ts-jest with Supertest. `src/__tests__/setup.ts` loads `.env.test`. The t
 src/__tests__/
 ├── setup.ts
 ├── health.test.ts                        # /health response shape
+├── config/env.test.ts                    # required-secret check
+├── middleware/rateLimit.test.ts          # 429 after the limit, env overrides, off under NODE_ENV=test
+├── routes/authRoutes.test.ts             # Google callback works without sessions and sets no cookie; logout
+├── utils/email.test.ts                   # linear-time email check, incl. former ReDoS inputs
 ├── controllers/
 │   ├── taskController.test.ts            # getAllTasks / getTodaysTasks with a mocked TaskModel
 │   ├── taskOwnership.test.ts             # every task handler passes the user ID; other users' tasks give 404
@@ -256,13 +263,15 @@ The `ci.yml` checks that can run locally all pass: typecheck, build, lint (0 err
 - The database schema is only partly bootstrapped by the app (see [Set up the database](#4-set-up-the-database)), and there is no migration tool yet.
 - There are no roles. Any signed-in user can create, edit and delete the shared subagents and assignment rules.
 - `/history/all` returns history grouped by task, not globally sorted by change time, because `get_task_history()`'s output columns are defined outside this repo.
-- There is no rate limiting.
+- Rate-limit counters are kept in memory: they reset on restart and are not shared between instances.
+- The Google OAuth flow sends no `state` parameter, so the callback is not protected against login CSRF.
 
 ## Roadmap (not yet built)
 
 - Migrations for the full schema (users, soft delete, history functions)
 - An admin role for managing subagents and assignment rules
-- Rate limiting and use of the `BCRYPT_ROUNDS` / logging settings from `.env.example`
+- A shared rate-limit store (e.g. Redis) and an OAuth `state` parameter
+- Use of the `BCRYPT_ROUNDS` / logging settings from `.env.example`
 - Broader test coverage (auth, validation, models)
 
 ## License

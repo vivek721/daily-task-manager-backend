@@ -244,9 +244,9 @@ Workflows in `.github/workflows/`:
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| `ci.yml` (Continuous Integration) | push / PR to `master`, `develop` | Typecheck + build, ESLint + Prettier check, Jest against a Postgres 15 service (uploads coverage to Codecov), Docker build + smoke test (runs the image against a throwaway Postgres 15 service and checks `/health` and a 401 from `/api/tasks`), `npm audit` + CodeQL, SQL init-script check |
-| `deploy.yml` (Deploy to Production) | push to `master`, `v*` tags, manual | Builds a multi-arch image and pushes it to GHCR. The staging and production deploy steps are placeholders. |
-| `quality.yml` (Code Quality & Performance) | push / PR to `master`, `develop`, weekly | SonarCloud scan (skipped unless the `SONAR_TOKEN` secret is set; `sonar-project.properties` also needs a real organization), Artillery load test of `/health`, complexity and build-size reports |
+| `ci.yml` (Continuous Integration) | push / PR to `main`, `develop` | Typecheck + build, ESLint + Prettier check, Jest against a Postgres 15 service (uploads coverage to Codecov), Docker build + smoke test (runs the image against a throwaway Postgres 15 service and checks `/health` and a 401 from `/api/tasks`), `npm audit` + CodeQL, SQL init-script check |
+| `deploy.yml` (Deploy to Production) | push to `main`, `v*` tags, manual | Builds a multi-arch image and pushes it to GHCR. The staging and production deploy steps are placeholders. |
+| `quality.yml` (Code Quality & Performance) | push / PR to `main`, `develop`, weekly | SonarCloud scan (skipped unless the `SONAR_TOKEN` secret is set; `sonar-project.properties` also needs a real organization), Artillery load test of `/health`, complexity and build-size reports |
 | `dependency-update.yml` (Dependency Updates) | weekly, manual | `npm audit` / `npm outdated` report. When started manually, it opens a PR with minor dependency updates. |
 
 The `ci.yml` checks that can run locally all pass: typecheck, build, lint (0 errors), `format:check`, `test:ci` (with coverage thresholds) and `npm audit --audit-level=moderate` (0 vulnerabilities). The Docker smoke test, CodeQL and the `quality.yml` jobs need GitHub Actions and have not been run yet.

@@ -2,9 +2,9 @@ name: Code Quality & Performance
 
 on:
   push:
-    branches: [ master, develop ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ master, develop ]
+    branches: [ main, develop ]
   schedule:
     # Run weekly quality checks on Sundays at 2 AM UTC
     - cron: '0 2 * * 0'

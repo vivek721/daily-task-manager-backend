@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { TaskModel } from '../models/Task';
 import { SubagentModel } from '../models/Subagent';
 import { CreateTaskInput, UpdateTaskInput, TaskFilters } from '../types/Task';
@@ -53,9 +53,9 @@ export const taskController = {
   },
 
   // Get old tasks
-  async getOldTasks(req: Request, res: Response): Promise<void> {
+  async getOldTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const tasks = await TaskModel.getOldTasks();
+      const tasks = await TaskModel.getOldTasks(req.user!.id);
       res.json({
         success: true,
         data: tasks,
@@ -71,10 +71,10 @@ export const taskController = {
   },
 
   // Get task by ID
-  async getTaskById(req: Request, res: Response): Promise<void> {
+  async getTaskById(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const task = await TaskModel.findById(id);
+      const task = await TaskModel.findById(id, req.user!.id);
 
       if (!task) {
         res.status(404).json({
@@ -146,12 +146,12 @@ export const taskController = {
   },
 
   // Update task
-  async updateTask(req: Request, res: Response): Promise<void> {
+  async updateTask(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const updateData: UpdateTaskInput = req.body;
 
-      const task = await TaskModel.update(id, updateData);
+      const task = await TaskModel.update(id, req.user!.id, updateData);
 
       if (!task) {
         res.status(404).json({
@@ -167,6 +167,13 @@ export const taskController = {
         message: 'Task updated successfully'
       });
     } catch (error) {
+      if (error instanceof Error && error.message === 'No fields to update') {
+        res.status(400).json({
+          success: false,
+          message: 'No updatable fields provided'
+        });
+        return;
+      }
       console.error('Error updating task:', error);
       res.status(500).json({
         success: false,
@@ -176,10 +183,10 @@ export const taskController = {
   },
 
   // Delete task
-  async deleteTask(req: Request, res: Response): Promise<void> {
+  async deleteTask(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const deleted = await TaskModel.delete(id);
+      const deleted = await TaskModel.delete(id, req.user!.id);
 
       if (!deleted) {
         res.status(404).json({
@@ -203,9 +210,9 @@ export const taskController = {
   },
 
   // Bulk operations for old tasks
-  async markAllOldTasksComplete(req: Request, res: Response): Promise<void> {
+  async markAllOldTasksComplete(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const count = await TaskModel.markAllOldTasksComplete();
+      const count = await TaskModel.markAllOldTasksComplete(req.user!.id);
       res.json({
         success: true,
         message: `${count} old tasks marked as complete`,
@@ -220,9 +227,9 @@ export const taskController = {
     }
   },
 
-  async deleteAllOldTasks(req: Request, res: Response): Promise<void> {
+  async deleteAllOldTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const count = await TaskModel.deleteAllOldTasks();
+      const count = await TaskModel.deleteAllOldTasks(req.user!.id);
       res.json({
         success: true,
         message: `${count} old tasks deleted`,
@@ -237,9 +244,9 @@ export const taskController = {
     }
   },
 
-  async deleteCompletedOldTasks(req: Request, res: Response): Promise<void> {
+  async deleteCompletedOldTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const count = await TaskModel.deleteCompletedOldTasks();
+      const count = await TaskModel.deleteCompletedOldTasks(req.user!.id);
       res.json({
         success: true,
         message: `${count} completed old tasks deleted`,
@@ -255,10 +262,10 @@ export const taskController = {
   },
 
   // Toggle task completion
-  async toggleTaskComplete(req: Request, res: Response): Promise<void> {
+  async toggleTaskComplete(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const task = await TaskModel.findById(id);
+      const task = await TaskModel.findById(id, req.user!.id);
 
       if (!task) {
         res.status(404).json({
@@ -268,7 +275,7 @@ export const taskController = {
         return;
       }
 
-      const updatedTask = await TaskModel.update(id, { completed: !task.completed });
+      const updatedTask = await TaskModel.update(id, req.user!.id, { completed: !task.completed });
       res.json({
         success: true,
         data: updatedTask,
@@ -284,9 +291,9 @@ export const taskController = {
   },
 
   // Get deleted tasks (within TTL period)
-  async getDeletedTasks(req: Request, res: Response): Promise<void> {
+  async getDeletedTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const tasks = await TaskModel.getDeletedTasks();
+      const tasks = await TaskModel.getDeletedTasks(req.user!.id);
       res.json({
         success: true,
         data: tasks,
@@ -302,10 +309,10 @@ export const taskController = {
   },
 
   // Restore a soft-deleted task
-  async restoreTask(req: Request, res: Response): Promise<void> {
+  async restoreTask(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const task = await TaskModel.restore(id);
+      const task = await TaskModel.restore(id, req.user!.id);
 
       if (!task) {
         res.status(404).json({
@@ -330,10 +337,10 @@ export const taskController = {
   },
 
   // Hard delete a task (bypass TTL)
-  async hardDeleteTask(req: Request, res: Response): Promise<void> {
+  async hardDeleteTask(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const deleted = await TaskModel.hardDelete(id);
+      const deleted = await TaskModel.hardDelete(id, req.user!.id);
 
       if (!deleted) {
         res.status(404).json({
@@ -357,12 +364,22 @@ export const taskController = {
   },
 
   // Get task history
-  async getTaskHistory(req: Request, res: Response): Promise<void> {
+  async getTaskHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
-      
-      const history = await TaskModel.getTaskHistory(id, limit);
+
+      // Only the owner may read a task's history (soft-deleted tasks included)
+      const task = await TaskModel.findById(id, req.user!.id, true);
+      if (!task) {
+        res.status(404).json({
+          success: false,
+          message: 'Task not found'
+        });
+        return;
+      }
+
+      const history = await TaskModel.getTaskHistory(id, req.user!.id, limit);
       res.json({
         success: true,
         data: history,
@@ -378,11 +395,11 @@ export const taskController = {
   },
 
   // Get all task history (not specific to one task)
-  async getAllTaskHistory(req: Request, res: Response): Promise<void> {
+  async getAllTaskHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
       
-      const history = await TaskModel.getTaskHistory(undefined, limit);
+      const history = await TaskModel.getAllTaskHistory(req.user!.id, limit);
       res.json({
         success: true,
         data: history,
@@ -398,9 +415,9 @@ export const taskController = {
   },
 
   // Manual cleanup of expired deleted tasks
-  async cleanupExpiredTasks(req: Request, res: Response): Promise<void> {
+  async cleanupExpiredTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const deletedCount = await TaskModel.cleanupExpiredTasks();
+      const deletedCount = await TaskModel.cleanupExpiredTasks(req.user!.id);
       res.json({
         success: true,
         message: `Cleaned up ${deletedCount} expired deleted tasks`,
@@ -416,9 +433,9 @@ export const taskController = {
   },
 
   // Get tasks about to expire (for notifications)
-  async getTasksAboutToExpire(req: Request, res: Response): Promise<void> {
+  async getTasksAboutToExpire(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const tasks = await TaskModel.getTasksAboutToExpire();
+      const tasks = await TaskModel.getTasksAboutToExpire(req.user!.id);
       res.json({
         success: true,
         data: tasks,

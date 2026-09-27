@@ -240,24 +240,40 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// Development login bypass (only works in development mode)
+// Fixed identity of the development user. It is a local account with no password, so it
+// cannot be used through /signin.
+export const DEV_USER = {
+  username: 'dev-user',
+  email: 'dev-user@example.com',
+  name: 'Dev User'
+} as const;
+
+// Development login bypass. Only enabled when NODE_ENV is explicitly 'development', so a
+// deployment that forgets to set NODE_ENV does not expose it.
 export const devLogin = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Only allow in development mode
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV !== 'development') {
       res.status(404).json({ error: 'Not found' });
       return;
     }
 
-    // Create or find a test user
+    // Find or create a real users row so the token's userId is a valid UUID that
+    // authenticateToken can load.
+    const user = await UserModel.findOrCreate({
+      username: DEV_USER.username,
+      email: DEV_USER.email,
+      name: DEV_USER.name,
+      auth_type: 'local'
+    });
+
     const testUser = {
-      id: 'dev-user-123',
-      email: 'test@example.com',
-      name: 'Test User'
+      id: user.id,
+      email: user.email,
+      name: user.name
     };
 
     // Generate JWT token for test user
-    const payload = { 
+    const payload = {
       userId: testUser.id,
       email: testUser.email,
       name: testUser.name 

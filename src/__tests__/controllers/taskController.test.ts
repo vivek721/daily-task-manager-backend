@@ -29,9 +29,6 @@ describe('Task Controller', () => {
         id: 'test-user-123',
         email: 'test@example.com',
         name: 'Test User',
-        google_id: 'google-123',
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       query: {},
     };

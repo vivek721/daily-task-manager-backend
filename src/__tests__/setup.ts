@@ -24,18 +24,20 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
+// Generate test user data
+const generateTestUser = () => ({
+  id: 'test-user-123',
+  email: 'test@example.com',
+  name: 'Test User',
+  google_id: 'google-123',
+  created_at: new Date(),
+  updated_at: new Date(),
+});
+
 // Global test utilities
 export const testUtils = {
-  // Generate test user data
-  generateTestUser: () => ({
-    id: 'test-user-123',
-    email: 'test@example.com',
-    name: 'Test User',
-    google_id: 'google-123',
-    created_at: new Date(),
-    updated_at: new Date(),
-  }),
-  
+  generateTestUser,
+
   // Generate test task data
   generateTestTask: () => ({
     id: 'test-task-123',
@@ -51,7 +53,7 @@ export const testUtils = {
   }),
   
   // Mock authenticated request
-  mockAuthRequest: (user = testUtils.generateTestUser()) => ({
+  mockAuthRequest: (user = generateTestUser()) => ({
     user,
     headers: {
       authorization: 'Bearer test-jwt-token',

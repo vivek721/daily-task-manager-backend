@@ -15,6 +15,9 @@ jobs:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
     if: github.event_name != 'schedule' # Skip for scheduled runs
+    env:
+      # Job-level so the scan step's `if` can see whether the secret is set
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     
     steps:
       - name: Checkout repository
@@ -36,7 +39,10 @@ jobs:
         env:
           NODE_ENV: test
           
+      # Needs a SONAR_TOKEN secret and a real sonar.organization in
+      # sonar-project.properties; skipped until SONAR_TOKEN is configured.
       - name: SonarCloud Scan
+        if: env.SONAR_TOKEN != ''
         uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -83,7 +89,12 @@ jobs:
           npm start &
           sleep 10 # Wait for app to start
         env:
-          DATABASE_URL: postgresql://perf_test_user:perf_test_password@localhost:5432/perf_test_db
+          # The API reads DB_* (DATABASE_URL is only used by the cleanup script)
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: perf_test_db
+          DB_USER: perf_test_user
+          DB_PASSWORD: perf_test_password
           JWT_SECRET: perf-test-secret
           SESSION_SECRET: perf-session-secret
           GOOGLE_CLIENT_ID: perf-client-id

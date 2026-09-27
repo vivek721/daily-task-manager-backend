@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { taskController } from '../../controllers/taskController';
 import { TaskModel } from '../../models/Task';
 import { AuthenticatedRequest } from '../../middleware/auth';
@@ -18,20 +18,17 @@ describe('Task Controller', () => {
   beforeEach(() => {
     responseJson = jest.fn().mockReturnThis();
     responseStatus = jest.fn().mockReturnThis();
-    
+
     mockResponse = {
       json: responseJson,
       status: responseStatus,
     };
-    
+
     mockRequest = {
       user: {
         id: 'test-user-123',
         email: 'test@example.com',
         name: 'Test User',
-        google_id: 'google-123',
-        created_at: new Date(),
-        updated_at: new Date(),
       },
       query: {},
     };
@@ -138,11 +135,11 @@ describe('Task Controller', () => {
   });
 
   describe('getTodaysTasks', () => {
-    it('should return today\'s tasks for authenticated user', async () => {
+    it("should return today's tasks for authenticated user", async () => {
       const mockTasks = [
         {
           id: 'task-today',
-          title: 'Today\'s Task',
+          title: "Today's Task",
           description: 'Task for today',
           completed: false,
           priority: 'high',
@@ -169,10 +166,10 @@ describe('Task Controller', () => {
       });
     });
 
-    it('should handle errors when fetching today\'s tasks', async () => {
-      MockedTaskModel.getTodaysTasks = jest.fn().mockRejectedValue(
-        new Error('Database connection failed')
-      );
+    it("should handle errors when fetching today's tasks", async () => {
+      MockedTaskModel.getTodaysTasks = jest
+        .fn()
+        .mockRejectedValue(new Error('Database connection failed'));
 
       await taskController.getTodaysTasks(
         mockRequest as AuthenticatedRequest,
@@ -182,7 +179,7 @@ describe('Task Controller', () => {
       expect(responseStatus).toHaveBeenCalledWith(500);
       expect(responseJson).toHaveBeenCalledWith({
         success: false,
-        message: 'Failed to retrieve today\'s tasks',
+        message: "Failed to retrieve today's tasks",
       });
     });
   });

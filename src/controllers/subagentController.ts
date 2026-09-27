@@ -1,35 +1,41 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { SubagentModel } from '../models/Subagent';
 import pool from '../config/database';
-import { 
-  CreateSubagentInput, 
-  UpdateSubagentInput, 
-  CreateAssignmentRuleInput, 
-  UpdateAssignmentRuleInput 
+import { TaskModel } from '../models/Task';
+import { AuthenticatedRequest } from '../middleware/auth';
+import {
+  CreateSubagentInput,
+  UpdateSubagentInput,
+  CreateAssignmentRuleInput,
+  SubagentAssignment,
 } from '../types/Subagent';
 
 const subagentModel = new SubagentModel(pool);
 
+// PostgreSQL unique_violation
+const isUniqueViolation = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && (error as { code?: unknown }).code === '23505';
+
 export const subagentController = {
   // Subagent CRUD operations
-  async getAllSubagents(req: Request, res: Response): Promise<void> {
+  getAllSubagents: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const subagents = await subagentModel.findAllSubagents();
       res.json({
         success: true,
         data: subagents,
-        count: subagents.length
+        count: subagents.length,
       });
     } catch (error) {
       console.error('Error getting subagents:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve subagents'
+        message: 'Failed to retrieve subagents',
       });
     }
   },
 
-  async getSubagentById(req: Request, res: Response): Promise<void> {
+  getSubagentById: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const subagent = await subagentModel.findSubagentById(id);
@@ -37,32 +43,32 @@ export const subagentController = {
       if (!subagent) {
         res.status(404).json({
           success: false,
-          message: 'Subagent not found'
+          message: 'Subagent not found',
         });
         return;
       }
 
       res.json({
         success: true,
-        data: subagent
+        data: subagent,
       });
     } catch (error) {
       console.error('Error getting subagent by ID:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve subagent'
+        message: 'Failed to retrieve subagent',
       });
     }
   },
 
-  async createSubagent(req: Request, res: Response): Promise<void> {
+  createSubagent: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const subagentData: CreateSubagentInput = req.body;
+      const subagentData = req.body as CreateSubagentInput;
 
       if (!subagentData.name || !subagentData.type) {
         res.status(400).json({
           success: false,
-          message: 'Subagent name and type are required'
+          message: 'Subagent name and type are required',
         });
         return;
       }
@@ -71,35 +77,36 @@ export const subagentController = {
       res.status(201).json({
         success: true,
         data: subagent,
-        message: 'Subagent created successfully'
+        message: 'Subagent created successfully',
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating subagent:', error);
-      if (error.code === '23505') { // Unique constraint violation
+      if (isUniqueViolation(error)) {
+        // Unique constraint violation
         res.status(409).json({
           success: false,
-          message: 'Subagent name already exists'
+          message: 'Subagent name already exists',
         });
       } else {
         res.status(500).json({
           success: false,
-          message: 'Failed to create subagent'
+          message: 'Failed to create subagent',
         });
       }
     }
   },
 
-  async updateSubagent(req: Request, res: Response): Promise<void> {
+  updateSubagent: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const updateData: UpdateSubagentInput = req.body;
+      const updateData = req.body as UpdateSubagentInput;
 
       const subagent = await subagentModel.updateSubagent(id, updateData);
 
       if (!subagent) {
         res.status(404).json({
           success: false,
-          message: 'Subagent not found'
+          message: 'Subagent not found',
         });
         return;
       }
@@ -107,18 +114,18 @@ export const subagentController = {
       res.json({
         success: true,
         data: subagent,
-        message: 'Subagent updated successfully'
+        message: 'Subagent updated successfully',
       });
     } catch (error) {
       console.error('Error updating subagent:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to update subagent'
+        message: 'Failed to update subagent',
       });
     }
   },
 
-  async deleteSubagent(req: Request, res: Response): Promise<void> {
+  deleteSubagent: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const deleted = await subagentModel.deleteSubagent(id);
@@ -126,123 +133,152 @@ export const subagentController = {
       if (!deleted) {
         res.status(404).json({
           success: false,
-          message: 'Subagent not found'
+          message: 'Subagent not found',
         });
         return;
       }
 
       res.json({
         success: true,
-        message: 'Subagent deleted successfully'
+        message: 'Subagent deleted successfully',
       });
     } catch (error) {
       console.error('Error deleting subagent:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to delete subagent'
+        message: 'Failed to delete subagent',
       });
     }
   },
 
   // Assignment operations
-  async assignTaskToSubagent(req: Request, res: Response): Promise<void> {
+  assignTaskToSubagent: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { taskId, subagentId } = req.params;
-      const { reason, metadata } = req.body;
+      const { reason, metadata } = req.body as {
+        reason?: string;
+        metadata?: Record<string, unknown>;
+      };
 
       if (!reason) {
         res.status(400).json({
           success: false,
-          message: 'Assignment reason is required'
+          message: 'Assignment reason is required',
+        });
+        return;
+      }
+
+      // Users may only assign their own tasks
+      const task = await TaskModel.findById(taskId, req.user!.id);
+      if (!task) {
+        res.status(404).json({
+          success: false,
+          message: 'Task not found',
         });
         return;
       }
 
       const assignment = await subagentModel.assignTaskToSubagent(
-        taskId, 
-        subagentId, 
-        reason, 
+        taskId,
+        subagentId,
+        reason,
         metadata
       );
 
       res.status(201).json({
         success: true,
         data: assignment,
-        message: 'Task assigned successfully'
+        message: 'Task assigned successfully',
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error assigning task:', error);
-      if (error.code === '23505') { // Unique constraint violation
+      if (isUniqueViolation(error)) {
+        // Unique constraint violation
         res.status(409).json({
           success: false,
-          message: 'Task is already assigned to this subagent'
+          message: 'Task is already assigned to this subagent',
         });
       } else {
         res.status(500).json({
           success: false,
-          message: 'Failed to assign task'
+          message: 'Failed to assign task',
         });
       }
     }
   },
 
-  async getTaskAssignments(req: Request, res: Response): Promise<void> {
+  getTaskAssignments: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { taskId } = req.params;
+
+      // Users may only see assignments of their own tasks (soft-deleted included)
+      const task = await TaskModel.findById(taskId, req.user!.id, true);
+      if (!task) {
+        res.status(404).json({
+          success: false,
+          message: 'Task not found',
+        });
+        return;
+      }
+
       const assignments = await subagentModel.getTaskAssignments(taskId);
 
       res.json({
         success: true,
         data: assignments,
-        count: assignments.length
+        count: assignments.length,
       });
     } catch (error) {
       console.error('Error getting task assignments:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve task assignments'
+        message: 'Failed to retrieve task assignments',
       });
     }
   },
 
-  async getSubagentAssignments(req: Request, res: Response): Promise<void> {
+  getSubagentAssignments: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { subagentId } = req.params;
-      const assignments = await subagentModel.getSubagentAssignments(subagentId);
+      const assignments = await subagentModel.getSubagentAssignments(subagentId, req.user!.id);
 
       res.json({
         success: true,
         data: assignments,
-        count: assignments.length
+        count: assignments.length,
       });
     } catch (error) {
       console.error('Error getting subagent assignments:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve subagent assignments'
+        message: 'Failed to retrieve subagent assignments',
       });
     }
   },
 
-  async updateAssignmentStatus(req: Request, res: Response): Promise<void> {
+  updateAssignmentStatus: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { assignmentId } = req.params;
-      const { status } = req.body;
+      const { status } = req.body as { status?: SubagentAssignment['status'] };
 
       if (!status) {
         res.status(400).json({
           success: false,
-          message: 'Status is required'
+          message: 'Status is required',
         });
         return;
       }
 
-      const assignment = await subagentModel.updateAssignmentStatus(assignmentId, status);
+      const assignment = await subagentModel.updateAssignmentStatus(
+        assignmentId,
+        status,
+        req.user!.id
+      );
 
       if (!assignment) {
         res.status(404).json({
           success: false,
-          message: 'Assignment not found'
+          message: 'Assignment not found',
         });
         return;
       }
@@ -250,41 +286,39 @@ export const subagentController = {
       res.json({
         success: true,
         data: assignment,
-        message: 'Assignment status updated successfully'
+        message: 'Assignment status updated successfully',
       });
     } catch (error) {
       console.error('Error updating assignment status:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to update assignment status'
+        message: 'Failed to update assignment status',
       });
     }
   },
 
   // Auto-assignment
-  async autoAssignTask(req: Request, res: Response): Promise<void> {
+  autoAssignTask: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { taskId } = req.params;
-      
-      // Get task details
-      const taskQuery = 'SELECT * FROM tasks WHERE id = $1 AND deleted_at IS NULL';
-      const taskResult = await pool.query(taskQuery, [taskId]);
-      
-      if (taskResult.rows.length === 0) {
+
+      // Get task details (only the caller's own, non-deleted tasks)
+      const task = await TaskModel.findById(taskId, req.user!.id);
+
+      if (!task) {
         res.status(404).json({
           success: false,
-          message: 'Task not found'
+          message: 'Task not found',
         });
         return;
       }
 
-      const task = taskResult.rows[0];
       const match = await subagentModel.evaluateTaskForRules(task);
 
       if (!match) {
         res.json({
           success: false,
-          message: 'No suitable subagent found for this task'
+          message: 'No suitable subagent found for this task',
         });
         return;
       }
@@ -301,45 +335,45 @@ export const subagentController = {
         data: {
           assignment,
           subagent: match.subagent,
-          rule: match.rule
+          rule: match.rule,
         },
-        message: 'Task auto-assigned successfully'
+        message: 'Task auto-assigned successfully',
       });
     } catch (error) {
       console.error('Error auto-assigning task:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to auto-assign task'
+        message: 'Failed to auto-assign task',
       });
     }
   },
 
   // Assignment Rules
-  async getAllAssignmentRules(req: Request, res: Response): Promise<void> {
+  getAllAssignmentRules: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const rules = await subagentModel.findAllAssignmentRules();
       res.json({
         success: true,
         data: rules,
-        count: rules.length
+        count: rules.length,
       });
     } catch (error) {
       console.error('Error getting assignment rules:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve assignment rules'
+        message: 'Failed to retrieve assignment rules',
       });
     }
   },
 
-  async createAssignmentRule(req: Request, res: Response): Promise<void> {
+  createAssignmentRule: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const ruleData: CreateAssignmentRuleInput = req.body;
+      const ruleData = req.body as CreateAssignmentRuleInput;
 
       if (!ruleData.name || !ruleData.trigger_conditions || !ruleData.assignment_criteria) {
         res.status(400).json({
           success: false,
-          message: 'Rule name, trigger conditions, and assignment criteria are required'
+          message: 'Rule name, trigger conditions, and assignment criteria are required',
         });
         return;
       }
@@ -348,50 +382,50 @@ export const subagentController = {
       res.status(201).json({
         success: true,
         data: rule,
-        message: 'Assignment rule created successfully'
+        message: 'Assignment rule created successfully',
       });
     } catch (error) {
       console.error('Error creating assignment rule:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to create assignment rule'
+        message: 'Failed to create assignment rule',
       });
     }
   },
 
   // Statistics and monitoring
-  async getSubagentStats(req: Request, res: Response): Promise<void> {
+  getSubagentStats: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const stats = await subagentModel.getSubagentStats();
       res.json({
         success: true,
-        data: stats
+        data: stats,
       });
     } catch (error) {
       console.error('Error getting subagent stats:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve subagent statistics'
+        message: 'Failed to retrieve subagent statistics',
       });
     }
   },
 
-  async getAssignmentHistory(req: Request, res: Response): Promise<void> {
+  getAssignmentHistory: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
-      const history = await subagentModel.getAssignmentHistory(limit);
-      
+      const history = await subagentModel.getAssignmentHistory(req.user!.id, limit);
+
       res.json({
         success: true,
         data: history,
-        count: history.length
+        count: history.length,
       });
     } catch (error) {
       console.error('Error getting assignment history:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve assignment history'
+        message: 'Failed to retrieve assignment history',
       });
     }
-  }
+  },
 };

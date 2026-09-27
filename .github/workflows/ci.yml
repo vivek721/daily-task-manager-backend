@@ -98,7 +98,6 @@ jobs:
           NODE_ENV: test
           DATABASE_URL: postgresql://test_user:test_password@localhost:5432/daily_task_manager_test
           JWT_SECRET: test-jwt-secret
-          SESSION_SECRET: test-session-secret
           GOOGLE_CLIENT_ID: test-client-id
           GOOGLE_CLIENT_SECRET: test-client-secret
           
@@ -114,30 +113,85 @@ jobs:
   docker:
     name: Docker Build Validation
     runs-on: ubuntu-latest
-    
+
+    # The app creates its tables on startup and exits if PostgreSQL is unreachable,
+    # so the smoke test needs a real (throwaway) database.
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: smoke_user
+          POSTGRES_PASSWORD: smoke_password
+          POSTGRES_DB: daily_task_manager_smoke
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-        
+
       - name: Build Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: false
+          # Load the image into the local Docker daemon so `docker run` can use it
+          load: true
           tags: daily-task-manager-backend:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          
+
       - name: Test Docker image
         run: |
-          docker run --rm -d --name test-container -p 3001:3001 daily-task-manager-backend:test
-          sleep 10
-          # Basic health check test
-          curl -f http://localhost:3001/health || exit 1
-          docker stop test-container
+          # Host networking lets the container reach the postgres service on localhost:5432.
+          # Google OAuth values are dummies: the strategy only needs them to be set at startup.
+          docker run -d --name test-container --network host \
+            -e NODE_ENV=production \
+            -e PORT=3001 \
+            -e DB_HOST=localhost \
+            -e DB_PORT=5432 \
+            -e DB_NAME=daily_task_manager_smoke \
+            -e DB_USER=smoke_user \
+            -e DB_PASSWORD=smoke_password \
+            -e JWT_SECRET=ci-smoke-jwt-secret \
+            -e GOOGLE_CLIENT_ID=ci-dummy-client-id \
+            -e GOOGLE_CLIENT_SECRET=ci-dummy-client-secret \
+            -e FRONTEND_URL=http://localhost:5173 \
+            daily-task-manager-backend:test
+
+          # Wait up to 60s for /health instead of a fixed sleep
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3001/health; then
+              echo
+              echo "Health check passed"
+              break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' test-container)" != "true" ]; then
+              echo "Container exited during startup"
+              break
+            fi
+            sleep 2
+          done
+
+          # Protected routes must reject requests without a token
+          status=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3001/api/tasks || true)
+          echo "GET /api/tasks without a token -> $status"
+
+          docker logs test-container
+          curl -fsS http://localhost:3001/health > /dev/null
+          test "$status" = "401"
+
+      - name: Stop test container
+        if: always()
+        run: docker rm -f test-container || true
 
   # Job 5: Security Scanning
   security:

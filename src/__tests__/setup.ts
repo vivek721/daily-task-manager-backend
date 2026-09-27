@@ -24,18 +24,20 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
+// Generate test user data
+const generateTestUser = () => ({
+  id: 'test-user-123',
+  email: 'test@example.com',
+  name: 'Test User',
+  google_id: 'google-123',
+  created_at: new Date(),
+  updated_at: new Date(),
+});
+
 // Global test utilities
 export const testUtils = {
-  // Generate test user data
-  generateTestUser: () => ({
-    id: 'test-user-123',
-    email: 'test@example.com',
-    name: 'Test User',
-    google_id: 'google-123',
-    created_at: new Date(),
-    updated_at: new Date(),
-  }),
-  
+  generateTestUser,
+
   // Generate test task data
   generateTestTask: () => ({
     id: 'test-task-123',
@@ -49,9 +51,9 @@ export const testUtils = {
     created_at: new Date(),
     updated_at: new Date(),
   }),
-  
+
   // Mock authenticated request
-  mockAuthRequest: (user = testUtils.generateTestUser()) => ({
+  mockAuthRequest: (user = generateTestUser()) => ({
     user,
     headers: {
       authorization: 'Bearer test-jwt-token',
@@ -59,14 +61,5 @@ export const testUtils = {
   }),
 };
 
-// Declare global for TypeScript
-declare global {
-  namespace NodeJS {
-    interface Global {
-      testUtils: typeof testUtils;
-    }
-  }
-}
-
-// Make testUtils available globally
-(global as any).testUtils = testUtils;
+// Make testUtils available globally (tests can also import it from this module)
+(global as Record<string, unknown>).testUtils = testUtils;

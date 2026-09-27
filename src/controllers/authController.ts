@@ -1,14 +1,19 @@
 import { Request, Response } from 'express';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { User, CreateLocalUserInput, LoginCredentials } from '../types/User';
+import { CreateLocalUserInput, LoginCredentials } from '../types/User';
 import { UserModel } from '../models/User';
+import { isValidEmail } from '../utils/email';
+import '../types/express';
 
-interface AuthenticatedRequest extends Request {
-  user?: User;
+// Claims signed into every JWT this API issues
+interface TokenPayload {
+  userId?: unknown;
+  email?: unknown;
+  name?: unknown;
 }
 
-export const googleCallback = (req: AuthenticatedRequest, res: Response): void => {
+export const googleCallback = (req: Request, res: Response): void => {
   try {
     if (!req.user) {
       res.redirect(`${process.env.FRONTEND_URL}/login?error=authentication_failed`);
@@ -16,16 +21,16 @@ export const googleCallback = (req: AuthenticatedRequest, res: Response): void =
     }
 
     // Generate JWT token
-    const payload = { 
+    const payload = {
       userId: req.user.id,
       email: req.user.email,
-      name: req.user.name 
+      name: req.user.name,
     };
     const secret = process.env.JWT_SECRET!;
-    const options = { 
-      expiresIn: process.env.JWT_EXPIRE || '7d' 
+    const options = {
+      expiresIn: process.env.JWT_EXPIRE || '7d',
     } as SignOptions;
-    
+
     const token = jwt.sign(payload, secret, options);
 
     // Redirect to frontend with token
@@ -36,7 +41,7 @@ export const googleCallback = (req: AuthenticatedRequest, res: Response): void =
   }
 };
 
-export const getProfile = (req: AuthenticatedRequest, res: Response): void => {
+export const getProfile = (req: Request, res: Response): void => {
   try {
     if (!req.user) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -47,7 +52,7 @@ export const getProfile = (req: AuthenticatedRequest, res: Response): void => {
     const { id, email, name, picture } = req.user;
     res.json({
       success: true,
-      user: { id, email, name, picture }
+      user: { id, email, name, picture },
     });
   } catch (error) {
     console.error('Error getting profile:', error);
@@ -55,35 +60,29 @@ export const getProfile = (req: AuthenticatedRequest, res: Response): void => {
   }
 };
 
-export const logout = (req: Request, res: Response): void => {
-  req.logout((err) => {
-    if (err) {
-      console.error('Error during logout:', err);
-      res.status(500).json({ error: 'Logout failed' });
-      return;
-    }
-    
-    res.json({ success: true, message: 'Logged out successfully' });
-  });
+// Auth is a stateless JWT, so there is no server-side session to end: the client logs
+// out by discarding its token. Kept so existing clients get the same response.
+export const logout = (_req: Request, res: Response): void => {
+  res.json({ success: true, message: 'Logged out successfully' });
 };
 
 export const verifyToken = (req: Request, res: Response): void => {
   const token = req.headers.authorization?.replace('Bearer ', '');
-  
+
   if (!token) {
     res.status(401).json({ error: 'No token provided' });
     return;
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-    res.json({ 
-      success: true, 
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as TokenPayload;
+    res.json({
+      success: true,
       user: {
         id: decoded.userId,
         email: decoded.email,
-        name: decoded.name
-      }
+        name: decoded.name,
+      },
     });
   } catch (error) {
     res.status(401).json({ error: 'Invalid token' });
@@ -93,7 +92,7 @@ export const verifyToken = (req: Request, res: Response): void => {
 // Local authentication signup
 export const signup = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { username, email, name, password }: CreateLocalUserInput = req.body;
+    const { username, email, name, password } = req.body as Partial<CreateLocalUserInput>;
 
     // Validation
     if (!username || !email || !name || !password) {
@@ -111,9 +110,8 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    // Email validation (linear-time; see src/utils/email.ts)
+    if (!isValidEmail(email)) {
       res.status(400).json({ error: 'Invalid email format' });
       return;
     }
@@ -142,22 +140,22 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
       email,
       name,
       password_hash,
-      auth_type: 'local' as const
+      auth_type: 'local' as const,
     };
 
     const user = await UserModel.create(userData);
 
     // Generate JWT token
-    const payload = { 
+    const payload = {
       userId: user.id,
       email: user.email,
-      name: user.name 
+      name: user.name,
     };
     const secret = process.env.JWT_SECRET!;
-    const options = { 
-      expiresIn: process.env.JWT_EXPIRE || '7d' 
+    const options = {
+      expiresIn: process.env.JWT_EXPIRE || '7d',
     } as SignOptions;
-    
+
     const token = jwt.sign(payload, secret, options);
 
     res.status(201).json({
@@ -167,9 +165,9 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
         id: user.id,
         email: user.email,
         name: user.name,
-        username: user.username
+        username: user.username,
       },
-      message: 'Account created successfully'
+      message: 'Account created successfully',
     });
   } catch (error) {
     console.error('Error in signup:', error);
@@ -180,7 +178,7 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
 // Local authentication signin
 export const signin = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { username, password }: LoginCredentials = req.body;
+    const { username, password } = req.body as Partial<LoginCredentials>;
 
     // Validation
     if (!username || !password) {
@@ -211,16 +209,16 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
     await UserModel.updateLastLogin(user.id);
 
     // Generate JWT token
-    const payload = { 
+    const payload = {
       userId: user.id,
       email: user.email,
-      name: user.name 
+      name: user.name,
     };
     const secret = process.env.JWT_SECRET!;
-    const options = { 
-      expiresIn: process.env.JWT_EXPIRE || '7d' 
+    const options = {
+      expiresIn: process.env.JWT_EXPIRE || '7d',
     } as SignOptions;
-    
+
     const token = jwt.sign(payload, secret, options);
 
     res.json({
@@ -230,9 +228,9 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
         id: user.id,
         email: user.email,
         name: user.name,
-        username: user.username
+        username: user.username,
       },
-      message: 'Login successful'
+      message: 'Login successful',
     });
   } catch (error) {
     console.error('Error in signin:', error);
@@ -240,40 +238,56 @@ export const signin = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-// Development login bypass (only works in development mode)
+// Fixed identity of the development user. It is a local account with no password, so it
+// cannot be used through /signin.
+export const DEV_USER = {
+  username: 'dev-user',
+  email: 'dev-user@example.com',
+  name: 'Dev User',
+} as const;
+
+// Development login bypass. Only enabled when NODE_ENV is explicitly 'development', so a
+// deployment that forgets to set NODE_ENV does not expose it.
 export const devLogin = async (req: Request, res: Response): Promise<void> => {
   try {
-    // Only allow in development mode
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV !== 'development') {
       res.status(404).json({ error: 'Not found' });
       return;
     }
 
-    // Create or find a test user
+    // Find or create a real users row so the token's userId is a valid UUID that
+    // authenticateToken can load.
+    const user = await UserModel.findOrCreate({
+      username: DEV_USER.username,
+      email: DEV_USER.email,
+      name: DEV_USER.name,
+      auth_type: 'local',
+    });
+
     const testUser = {
-      id: 'dev-user-123',
-      email: 'test@example.com',
-      name: 'Test User'
+      id: user.id,
+      email: user.email,
+      name: user.name,
     };
 
     // Generate JWT token for test user
-    const payload = { 
+    const payload = {
       userId: testUser.id,
       email: testUser.email,
-      name: testUser.name 
+      name: testUser.name,
     };
     const secret = process.env.JWT_SECRET!;
-    const options = { 
-      expiresIn: process.env.JWT_EXPIRE || '7d' 
+    const options = {
+      expiresIn: process.env.JWT_EXPIRE || '7d',
     } as SignOptions;
-    
+
     const token = jwt.sign(payload, secret, options);
 
     res.json({
       success: true,
       token,
       user: testUser,
-      message: 'Development login successful'
+      message: 'Development login successful',
     });
   } catch (error) {
     console.error('Error in dev login:', error);

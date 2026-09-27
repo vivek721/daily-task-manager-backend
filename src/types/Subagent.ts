@@ -13,13 +13,7 @@ export interface Subagent {
   updated_at: Date;
 }
 
-export type SubagentType = 
-  | 'developer' 
-  | 'reviewer' 
-  | 'tester' 
-  | 'deployer' 
-  | 'monitor' 
-  | 'analyst';
+export type SubagentType = 'developer' | 'reviewer' | 'tester' | 'deployer' | 'monitor' | 'analyst';
 
 export interface SubagentAssignment {
   id: string;
@@ -112,7 +106,7 @@ export const SUBAGENT_CAPABILITIES = [
   'feature_development',
   'integration_testing',
   'ui_ux_design',
-  'api_development'
+  'api_development',
 ] as const;
 
-export type SubagentCapability = typeof SUBAGENT_CAPABILITIES[number];
+export type SubagentCapability = (typeof SUBAGENT_CAPABILITIES)[number];

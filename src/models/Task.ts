@@ -2,16 +2,36 @@ import pool from '../config/database';
 import { Task, CreateTaskInput, UpdateTaskInput, TaskFilters } from '../types/Task';
 import { QueryResult } from 'pg';
 
+// Columns a client is allowed to change through TaskModel.update. Anything else in the
+// payload (id, user_id, deleted_at, created_at, ...) is ignored so a caller can never
+// re-assign a task to another user or inject SQL through a column name.
+const UPDATABLE_COLUMNS: ReadonlyArray<keyof UpdateTaskInput> = [
+  'title',
+  'description',
+  'completed',
+  'priority',
+  'due_date',
+  'category',
+  'tags',
+];
+
+// Rows of get_task_history() and the expiring_deleted_tasks view. Their columns are
+// defined in the database (not in this repo), so they are passed through untyped.
+export type TaskHistoryEntry = Record<string, unknown>;
+export type ExpiringTaskEntry = Record<string, unknown>;
+
+// Overdue = due before today, or (no due date and) created before today.
+const OVERDUE_CONDITION = `
+  (
+    (due_date IS NOT NULL AND DATE(due_date) < CURRENT_DATE)
+    OR (due_date IS NULL AND DATE(created_at) < CURRENT_DATE)
+  )`;
+
+// Every method that reads or writes tasks requires the owning user's id and filters on
+// `user_id`, so one user can never see or change another user's tasks.
 export class TaskModel {
-  static async create(taskData: CreateTaskInput, userId?: string): Promise<Task> {
-    const {
-      title,
-      description,
-      priority = 'medium',
-      due_date,
-      category,
-      tags
-    } = taskData;
+  static async create(taskData: CreateTaskInput, userId: string): Promise<Task> {
+    const { title, description, priority = 'medium', due_date, category, tags } = taskData;
 
     const query = `
       INSERT INTO tasks (title, description, priority, due_date, category, tags, user_id)
@@ -26,7 +46,7 @@ export class TaskModel {
       due_date ? new Date(due_date) : null,
       category || null,
       tags || [],
-      userId || null
+      userId,
     ];
 
     try {
@@ -38,20 +58,10 @@ export class TaskModel {
     }
   }
 
-  static async findAll(filters: TaskFilters = {}, userId?: string): Promise<Task[]> {
-    let query = 'SELECT * FROM tasks WHERE deleted_at IS NULL';
-    const values: any[] = [];
-    let paramCount = 0;
-
-    // Filter by user if provided
-    if (userId) {
-      paramCount++;
-      query += ` AND user_id = $${paramCount}`;
-      values.push(userId);
-    } else {
-      // If no userId provided, only show tasks without user_id (legacy tasks)
-      query += ' AND user_id IS NULL';
-    }
+  static async findAll(filters: TaskFilters = {}, userId: string): Promise<Task[]> {
+    let query = 'SELECT * FROM tasks WHERE deleted_at IS NULL AND user_id = $1';
+    const values: unknown[] = [userId];
+    let paramCount = 1;
 
     if (filters.completed !== undefined) {
       paramCount++;
@@ -106,22 +116,17 @@ export class TaskModel {
     }
   }
 
-  static async findById(id: string, userId?: string, includeDeleted: boolean = false): Promise<Task | null> {
-    let query = includeDeleted 
-      ? 'SELECT * FROM tasks WHERE id = $1'
-      : 'SELECT * FROM tasks WHERE id = $1 AND deleted_at IS NULL';
-    
-    const values: any[] = [id];
-    
-    if (userId) {
-      query += ' AND user_id = $2';
-      values.push(userId);
-    } else {
-      query += ' AND user_id IS NULL';
-    }
-    
+  static async findById(
+    id: string,
+    userId: string,
+    includeDeleted: boolean = false
+  ): Promise<Task | null> {
+    const query = includeDeleted
+      ? 'SELECT * FROM tasks WHERE id = $1 AND user_id = $2'
+      : 'SELECT * FROM tasks WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL';
+
     try {
-      const result: QueryResult<Task> = await pool.query(query, values);
+      const result: QueryResult<Task> = await pool.query(query, [id, userId]);
       return result.rows[0] || null;
     } catch (error) {
       console.error('Error finding task by ID:', error);
@@ -129,12 +134,17 @@ export class TaskModel {
     }
   }
 
-  static async update(id: string, updateData: UpdateTaskInput): Promise<Task | null> {
+  static async update(
+    id: string,
+    userId: string,
+    updateData: UpdateTaskInput
+  ): Promise<Task | null> {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramCount = 0;
 
-    Object.entries(updateData).forEach(([key, value]) => {
+    UPDATABLE_COLUMNS.forEach(key => {
+      const value = updateData[key];
       if (value !== undefined) {
         paramCount++;
         fields.push(`${key} = $${paramCount}`);
@@ -150,14 +160,13 @@ export class TaskModel {
       throw new Error('No fields to update');
     }
 
-    paramCount++;
     const query = `
-      UPDATE tasks 
+      UPDATE tasks
       SET ${fields.join(', ')}
-      WHERE id = $${paramCount}
+      WHERE id = $${paramCount + 1} AND user_id = $${paramCount + 2}
       RETURNING *
     `;
-    values.push(id);
+    values.push(id, userId);
 
     try {
       const result: QueryResult<Task> = await pool.query(query, values);
@@ -169,11 +178,14 @@ export class TaskModel {
   }
 
   // Soft delete - marks task as deleted but keeps it in database
-  static async delete(id: string): Promise<boolean> {
-    const query = 'UPDATE tasks SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL';
-    
+  static async delete(id: string, userId: string): Promise<boolean> {
+    const query = `
+      UPDATE tasks SET deleted_at = NOW()
+      WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+    `;
+
     try {
-      const result = await pool.query(query, [id]);
+      const result = await pool.query(query, [id, userId]);
       return result.rowCount !== null && result.rowCount > 0;
     } catch (error) {
       console.error('Error soft deleting task:', error);
@@ -182,11 +194,11 @@ export class TaskModel {
   }
 
   // Hard delete - permanently removes task from database
-  static async hardDelete(id: string): Promise<boolean> {
-    const query = 'DELETE FROM tasks WHERE id = $1';
-    
+  static async hardDelete(id: string, userId: string): Promise<boolean> {
+    const query = 'DELETE FROM tasks WHERE id = $1 AND user_id = $2';
+
     try {
-      const result = await pool.query(query, [id]);
+      const result = await pool.query(query, [id, userId]);
       return result.rowCount !== null && result.rowCount > 0;
     } catch (error) {
       console.error('Error hard deleting task:', error);
@@ -195,11 +207,15 @@ export class TaskModel {
   }
 
   // Restore a soft-deleted task
-  static async restore(id: string): Promise<Task | null> {
-    const query = 'UPDATE tasks SET deleted_at = NULL WHERE id = $1 AND deleted_at IS NOT NULL RETURNING *';
-    
+  static async restore(id: string, userId: string): Promise<Task | null> {
+    const query = `
+      UPDATE tasks SET deleted_at = NULL
+      WHERE id = $1 AND user_id = $2 AND deleted_at IS NOT NULL
+      RETURNING *
+    `;
+
     try {
-      const result: QueryResult<Task> = await pool.query(query, [id]);
+      const result: QueryResult<Task> = await pool.query(query, [id, userId]);
       return result.rows[0] || null;
     } catch (error) {
       console.error('Error restoring task:', error);
@@ -207,24 +223,17 @@ export class TaskModel {
     }
   }
 
-  static async getTodaysTasks(userId?: string): Promise<Task[]> {
-    let query = `
-      SELECT * FROM tasks 
+  static async getTodaysTasks(userId: string): Promise<Task[]> {
+    const query = `
+      SELECT * FROM tasks
       WHERE deleted_at IS NULL
+        AND user_id = $1
         AND (
           DATE(created_at) = CURRENT_DATE
           OR DATE(due_date) >= CURRENT_DATE
-        )`;
-    
-    const values: any[] = [];
-    if (userId) {
-      query += ` AND user_id = $1`;
-      values.push(userId);
-    }
-    
-    query += `
-      ORDER BY 
-        CASE 
+        )
+      ORDER BY
+        CASE
           WHEN due_date IS NOT NULL AND DATE(due_date) = CURRENT_DATE THEN 1
           WHEN DATE(created_at) = CURRENT_DATE THEN 2
           ELSE 3
@@ -238,28 +247,26 @@ export class TaskModel {
     `;
 
     try {
-      const result: QueryResult<Task> = await pool.query(query, values);
+      const result: QueryResult<Task> = await pool.query(query, [userId]);
       return result.rows;
     } catch (error) {
-      console.error('Error getting today\'s tasks:', error);
+      console.error("Error getting today's tasks:", error);
       throw error;
     }
   }
 
-  static async getOldTasks(): Promise<Task[]> {
+  static async getOldTasks(userId: string): Promise<Task[]> {
     const query = `
-      SELECT * FROM tasks 
+      SELECT * FROM tasks
       WHERE deleted_at IS NULL
-        AND (
-          (due_date IS NOT NULL AND DATE(due_date) < CURRENT_DATE)
-          OR (due_date IS NULL AND DATE(created_at) < CURRENT_DATE)
-        )
-      ORDER BY 
+        AND user_id = $1
+        AND ${OVERDUE_CONDITION}
+      ORDER BY
         CASE WHEN due_date IS NOT NULL THEN due_date ELSE created_at END DESC
     `;
 
     try {
-      const result: QueryResult<Task> = await pool.query(query);
+      const result: QueryResult<Task> = await pool.query(query, [userId]);
       return result.rows;
     } catch (error) {
       console.error('Error getting old tasks:', error);
@@ -267,20 +274,18 @@ export class TaskModel {
     }
   }
 
-  static async markAllOldTasksComplete(): Promise<number> {
+  static async markAllOldTasksComplete(userId: string): Promise<number> {
     const query = `
-      UPDATE tasks 
-      SET completed = true 
+      UPDATE tasks
+      SET completed = true
       WHERE deleted_at IS NULL
-        AND completed = false 
-        AND (
-          (due_date IS NOT NULL AND DATE(due_date) < CURRENT_DATE)
-          OR (due_date IS NULL AND DATE(created_at) < CURRENT_DATE)
-        )
+        AND user_id = $1
+        AND completed = false
+        AND ${OVERDUE_CONDITION}
     `;
 
     try {
-      const result = await pool.query(query);
+      const result = await pool.query(query, [userId]);
       return result.rowCount || 0;
     } catch (error) {
       console.error('Error marking old tasks complete:', error);
@@ -288,19 +293,17 @@ export class TaskModel {
     }
   }
 
-  static async deleteAllOldTasks(): Promise<number> {
+  static async deleteAllOldTasks(userId: string): Promise<number> {
     const query = `
-      UPDATE tasks 
+      UPDATE tasks
       SET deleted_at = NOW()
       WHERE deleted_at IS NULL
-        AND (
-          (due_date IS NOT NULL AND DATE(due_date) < CURRENT_DATE)
-          OR (due_date IS NULL AND DATE(created_at) < CURRENT_DATE)
-        )
+        AND user_id = $1
+        AND ${OVERDUE_CONDITION}
     `;
 
     try {
-      const result = await pool.query(query);
+      const result = await pool.query(query, [userId]);
       return result.rowCount || 0;
     } catch (error) {
       console.error('Error deleting old tasks:', error);
@@ -308,20 +311,18 @@ export class TaskModel {
     }
   }
 
-  static async deleteCompletedOldTasks(): Promise<number> {
+  static async deleteCompletedOldTasks(userId: string): Promise<number> {
     const query = `
-      UPDATE tasks 
+      UPDATE tasks
       SET deleted_at = NOW()
       WHERE deleted_at IS NULL
-        AND completed = true 
-        AND (
-          (due_date IS NOT NULL AND DATE(due_date) < CURRENT_DATE)
-          OR (due_date IS NULL AND DATE(created_at) < CURRENT_DATE)
-        )
+        AND user_id = $1
+        AND completed = true
+        AND ${OVERDUE_CONDITION}
     `;
 
     try {
-      const result = await pool.query(query);
+      const result = await pool.query(query, [userId]);
       return result.rowCount || 0;
     } catch (error) {
       console.error('Error deleting completed old tasks:', error);
@@ -330,15 +331,16 @@ export class TaskModel {
   }
 
   // Get deleted tasks (within TTL period)
-  static async getDeletedTasks(): Promise<Task[]> {
+  static async getDeletedTasks(userId: string): Promise<Task[]> {
     const query = `
-      SELECT * FROM tasks 
+      SELECT * FROM tasks
       WHERE deleted_at IS NOT NULL
+        AND user_id = $1
       ORDER BY deleted_at DESC
     `;
 
     try {
-      const result: QueryResult<Task> = await pool.query(query);
+      const result: QueryResult<Task> = await pool.query(query, [userId]);
       return result.rows;
     } catch (error) {
       console.error('Error getting deleted tasks:', error);
@@ -346,16 +348,23 @@ export class TaskModel {
     }
   }
 
-  // Get task history
-  static async getTaskHistory(taskId?: string, limit: number = 100): Promise<any[]> {
-    const query = taskId 
-      ? 'SELECT * FROM get_task_history($1, $2)'
-      : 'SELECT * FROM get_task_history(NULL, $1)';
-    
-    const values = taskId ? [taskId, limit] : [limit];
+  // History for one task. Callers must check ownership first (see the controller), but
+  // the task is joined on user_id here as well so the query can never leak another
+  // user's history on its own.
+  static async getTaskHistory(
+    taskId: string,
+    userId: string,
+    limit: number = 100
+  ): Promise<TaskHistoryEntry[]> {
+    const query = `
+      SELECT h.*
+      FROM tasks t
+      CROSS JOIN LATERAL get_task_history(t.id, $3) h
+      WHERE t.id = $1 AND t.user_id = $2
+    `;
 
     try {
-      const result = await pool.query(query, values);
+      const result = await pool.query<TaskHistoryEntry>(query, [taskId, userId, limit]);
       return result.rows;
     } catch (error) {
       console.error('Error getting task history:', error);
@@ -363,25 +372,60 @@ export class TaskModel {
     }
   }
 
-  // Cleanup expired deleted tasks
-  static async cleanupExpiredTasks(): Promise<number> {
-    const query = 'SELECT cleanup_expired_deleted_tasks() as deleted_count';
+  // History across all of a user's tasks (including soft-deleted ones).
+  // get_task_history(NULL, limit) returns every user's history, so instead the function is
+  // called once per task the user owns. Rows are grouped by task (most recently updated
+  // task first) rather than globally ordered by change time, because the function's output
+  // columns are defined in the database, not in this repo.
+  static async getAllTaskHistory(userId: string, limit: number = 100): Promise<TaskHistoryEntry[]> {
+    const query = `
+      SELECT h.*
+      FROM (
+        SELECT id FROM tasks WHERE user_id = $1 ORDER BY updated_at DESC
+      ) t
+      CROSS JOIN LATERAL get_task_history(t.id, $2) h
+      LIMIT $2
+    `;
 
     try {
-      const result = await pool.query(query);
-      return result.rows[0].deleted_count || 0;
+      const result = await pool.query<TaskHistoryEntry>(query, [userId, limit]);
+      return result.rows;
+    } catch (error) {
+      console.error('Error getting task history:', error);
+      throw error;
+    }
+  }
+
+  // Permanently remove the user's own tasks that were soft-deleted more than a day ago
+  // (the same TTL scripts/cleanup-deleted-tasks.js uses). The database-wide
+  // cleanup_expired_deleted_tasks() function is left to that scheduled script.
+  static async cleanupExpiredTasks(userId: string): Promise<number> {
+    const query = `
+      DELETE FROM tasks
+      WHERE user_id = $1
+        AND deleted_at IS NOT NULL
+        AND deleted_at < NOW() - INTERVAL '1 day'
+    `;
+
+    try {
+      const result = await pool.query(query, [userId]);
+      return result.rowCount || 0;
     } catch (error) {
       console.error('Error cleaning up expired tasks:', error);
       throw error;
     }
   }
 
-  // Get tasks about to expire (for notifications)
-  static async getTasksAboutToExpire(): Promise<any[]> {
-    const query = 'SELECT * FROM expiring_deleted_tasks WHERE hours_until_expiry <= 2';
+  // Get the user's deleted tasks that are about to expire (for notifications)
+  static async getTasksAboutToExpire(userId: string): Promise<ExpiringTaskEntry[]> {
+    const query = `
+      SELECT e.* FROM expiring_deleted_tasks e
+      WHERE e.hours_until_expiry <= 2
+        AND e.id IN (SELECT t.id FROM tasks t WHERE t.user_id = $1)
+    `;
 
     try {
-      const result = await pool.query(query);
+      const result = await pool.query<ExpiringTaskEntry>(query, [userId]);
       return result.rows;
     } catch (error) {
       console.error('Error getting tasks about to expire:', error);

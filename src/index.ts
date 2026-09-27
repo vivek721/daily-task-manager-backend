@@ -1,47 +1,47 @@
+/* eslint-disable no-process-exit -- process entry point: exiting on startup failure,
+   uncaught exceptions and SIGTERM/SIGINT is intended here. */
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
-import session from 'express-session';
 
 import { initDatabase } from './config/database';
 import taskRoutes from './routes/taskRoutes';
 import subagentRoutes from './routes/subagentRoutes';
 import authRoutes from './routes/authRoutes';
 import { errorHandler, notFound } from './middleware/errorHandler';
-import { validateCreateTask, validateUpdateTask, validateTaskId } from './middleware/validation';
 import passport from './config/passport';
+import { getMissingSecrets } from './config/env';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Rate limits are per client IP. Behind a reverse proxy / load balancer, set TRUST_PROXY
+// (e.g. 1 = trust one hop) so req.ip is the client, not the proxy.
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  app.set('trust proxy', Number.isInteger(hops) ? hops : process.env.TRUST_PROXY);
+}
+
 // Middleware
 app.use(helmet());
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    credentials: true,
+  })
+);
 app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Session configuration for Passport
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-session-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
-}));
-
-// Initialize Passport
+// Passport is only used for the Google OAuth handshake, which is stateless
+// (session: false on the routes; the callback issues a JWT). API requests authenticate
+// with a Bearer JWT, so there is no session cookie to protect against CSRF.
 app.use(passport.initialize());
-app.use(passport.session());
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -49,7 +49,7 @@ app.get('/health', (req, res) => {
     success: true,
     message: 'Daily Task Manager API is running',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
   });
 });
 
@@ -63,11 +63,21 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start server
-const startServer = async () => {
+const startServer = async (): Promise<void> => {
+  const missingSecrets = getMissingSecrets();
+  if (missingSecrets.length > 0) {
+    const message = `Missing or placeholder secrets: ${missingSecrets.join(', ')}`;
+    if (process.env.NODE_ENV === 'production') {
+      console.error(`${message}. Refusing to start in production.`);
+      process.exit(1);
+    }
+    console.warn(`${message}. Authentication will not work until they are set.`);
+  }
+
   try {
     // Initialize database
     await initDatabase();
-    
+
     app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 Health check: http://localhost:${PORT}/health`);
@@ -86,7 +96,7 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   console.error('Uncaught Exception:', error);
   process.exit(1);
 });
@@ -102,4 +112,4 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-startServer();
+void startServer();

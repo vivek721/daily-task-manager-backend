@@ -36,13 +36,13 @@ export class UserModel {
     `;
 
     const values = [
-      google_id || null, 
-      email, 
-      name, 
-      picture || null, 
-      username || null, 
-      password_hash || null, 
-      auth_type
+      google_id || null,
+      email,
+      name,
+      picture || null,
+      username || null,
+      password_hash || null,
+      auth_type,
     ];
 
     try {
@@ -56,7 +56,7 @@ export class UserModel {
 
   static async findByGoogleId(googleId: string): Promise<User | null> {
     const query = 'SELECT * FROM users WHERE google_id = $1';
-    
+
     try {
       const result: QueryResult<User> = await pool.query(query, [googleId]);
       return result.rows[0] || null;
@@ -68,7 +68,7 @@ export class UserModel {
 
   static async findByEmail(email: string): Promise<User | null> {
     const query = 'SELECT * FROM users WHERE email = $1';
-    
+
     try {
       const result: QueryResult<User> = await pool.query(query, [email]);
       return result.rows[0] || null;
@@ -80,7 +80,7 @@ export class UserModel {
 
   static async findById(id: string): Promise<User | null> {
     const query = 'SELECT * FROM users WHERE id = $1';
-    
+
     try {
       const result: QueryResult<User> = await pool.query(query, [id]);
       return result.rows[0] || null;
@@ -97,7 +97,7 @@ export class UserModel {
       WHERE id = $1
       RETURNING *
     `;
-    
+
     try {
       const result: QueryResult<User> = await pool.query(query, [id]);
       return result.rows[0] || null;
@@ -109,7 +109,7 @@ export class UserModel {
 
   static async update(id: string, updateData: Partial<CreateUserInput>): Promise<User | null> {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramCount = 0;
 
     Object.entries(updateData).forEach(([key, value]) => {
@@ -126,7 +126,7 @@ export class UserModel {
 
     paramCount++;
     fields.push(`updated_at = NOW()`);
-    
+
     const query = `
       UPDATE users 
       SET ${fields.join(', ')}
@@ -146,25 +146,26 @@ export class UserModel {
 
   static async findOrCreate(userData: CreateUserInput): Promise<User> {
     let user: User | null = null;
-    
+
     if (userData.auth_type === 'google' && userData.google_id) {
       user = await this.findByGoogleId(userData.google_id);
     } else if (userData.auth_type === 'local' && userData.username) {
       user = await this.findByUsername(userData.username);
     }
-    
+
     if (!user) {
       user = await this.create(userData);
     } else {
       // Update user info in case it changed
-      user = await this.update(user.id, {
-        name: userData.name,
-        picture: userData.picture,
-        email: userData.email
-      }) || user;
-      
+      user =
+        (await this.update(user.id, {
+          name: userData.name,
+          picture: userData.picture,
+          email: userData.email,
+        })) || user;
+
       // Update last login
-      user = await this.updateLastLogin(user.id) || user;
+      user = (await this.updateLastLogin(user.id)) || user;
     }
 
     return user;
@@ -172,7 +173,7 @@ export class UserModel {
 
   static async findByUsername(username: string): Promise<User | null> {
     const query = 'SELECT * FROM users WHERE username = $1 AND auth_type = $2';
-    
+
     try {
       const result: QueryResult<User> = await pool.query(query, [username, 'local']);
       return result.rows[0] || null;
@@ -182,9 +183,12 @@ export class UserModel {
     }
   }
 
-  static async findByEmailAndAuthType(email: string, authType: 'google' | 'local'): Promise<User | null> {
+  static async findByEmailAndAuthType(
+    email: string,
+    authType: 'google' | 'local'
+  ): Promise<User | null> {
     const query = 'SELECT * FROM users WHERE email = $1 AND auth_type = $2';
-    
+
     try {
       const result: QueryResult<User> = await pool.query(query, [email, authType]);
       return result.rows[0] || null;
@@ -196,7 +200,7 @@ export class UserModel {
 
   static async checkUsernameExists(username: string): Promise<boolean> {
     const query = 'SELECT id FROM users WHERE username = $1';
-    
+
     try {
       const result: QueryResult = await pool.query(query, [username]);
       return result.rows.length > 0;
@@ -206,15 +210,18 @@ export class UserModel {
     }
   }
 
-  static async checkEmailExists(email: string, excludeAuthType?: 'google' | 'local'): Promise<boolean> {
+  static async checkEmailExists(
+    email: string,
+    excludeAuthType?: 'google' | 'local'
+  ): Promise<boolean> {
     let query = 'SELECT id FROM users WHERE email = $1';
-    const values: any[] = [email];
-    
+    const values: unknown[] = [email];
+
     if (excludeAuthType) {
       query += ' AND auth_type != $2';
       values.push(excludeAuthType);
     }
-    
+
     try {
       const result: QueryResult = await pool.query(query, values);
       return result.rows.length > 0;

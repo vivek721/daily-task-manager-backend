@@ -8,10 +8,10 @@ module.exports = {
   plugins: ['@typescript-eslint', 'node', 'security'],
   extends: [
     'eslint:recommended',
-    '@typescript-eslint/recommended',
-    '@typescript-eslint/recommended-requiring-type-checking',
+    'plugin:@typescript-eslint/recommended',
+    'plugin:@typescript-eslint/recommended-requiring-type-checking',
     'plugin:node/recommended',
-    'plugin:security/recommended',
+    'plugin:security/recommended-legacy',
     'prettier',
   ],
   env: {
@@ -24,7 +24,6 @@ module.exports = {
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     '@typescript-eslint/explicit-function-return-type': ['warn', { allowExpressions: true }],
     '@typescript-eslint/no-explicit-any': 'warn',
-    '@typescript-eslint/prefer-const': 'error',
     '@typescript-eslint/no-var-requires': 'error',
     
     // Security rules
@@ -54,15 +53,10 @@ module.exports = {
     'no-var': 'error',
     'object-shorthand': 'error',
     'prefer-template': 'error',
-    'template-curly-spacing': 'error',
-    'arrow-spacing': 'error',
-    'comma-dangle': ['error', 'always-multiline'],
-    'quotes': ['error', 'single', { avoidEscape: true }],
-    'semi': ['error', 'always'],
-    'indent': ['error', 2],
-    'max-len': ['warn', { code: 100, ignoreUrls: true, ignoreStrings: true }],
-    'no-multiple-empty-lines': ['error', { max: 1, maxEOF: 0 }],
-    'eol-last': 'error',
+    // Formatting (quotes, semicolons, indentation, trailing commas, line length, blank
+    // lines, EOF newline) is owned by Prettier (.prettierrc, `npm run format:check`).
+    // Re-enabling those rules here would override eslint-config-prettier and conflict
+    // with Prettier's output (e.g. comma-dangle vs. trailingComma: "es5").
   },
   overrides: [
     {
@@ -73,6 +67,9 @@ module.exports = {
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',
         'security/detect-object-injection': 'off',
+        // Jest assertions reference mocked methods without calling them
+        // (expect(Model.method).toHaveBeenCalled()), which this rule reports as unbound.
+        '@typescript-eslint/unbound-method': 'off',
       },
     },
   ],

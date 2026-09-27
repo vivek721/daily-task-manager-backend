@@ -10,8 +10,12 @@ import {
   signin,
 } from '../controllers/authController';
 import { authenticateToken } from '../middleware/auth';
+import { apiLimiter, authLimiter } from '../middleware/rateLimit';
 
 const router = express.Router();
+
+// General rate limit for every auth route; credential endpoints add authLimiter below
+router.use(apiLimiter);
 
 // Google OAuth routes. Stateless: no login session is created; the callback handler
 // signs a JWT and redirects to the frontend with it.
@@ -34,15 +38,15 @@ router.get(
 );
 
 // Local authentication routes
-router.post('/signup', signup);
-router.post('/signin', signin);
+router.post('/signup', authLimiter, signup);
+router.post('/signin', authLimiter, signin);
 
 // Development routes (only in development mode)
-router.post('/dev-login', devLogin);
+router.post('/dev-login', authLimiter, devLogin);
 
 // Protected routes
 router.get('/profile', authenticateToken, getProfile);
 router.post('/logout', logout);
-router.post('/verify', verifyToken);
+router.post('/verify', authLimiter, verifyToken);
 
 export default router;

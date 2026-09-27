@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { taskController } from '../controllers/taskController';
 import { validateCreateTask, validateUpdateTask, validateTaskId } from '../middleware/validation';
 import { authenticateToken } from '../middleware/auth';
+import { apiLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
-// Apply required authentication to all routes
+// Rate limit, then require authentication, on all routes
+router.use(apiLimiter);
 router.use(authenticateToken);
 
 // Specific routes (must come before dynamic :id routes)

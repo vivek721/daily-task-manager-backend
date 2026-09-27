@@ -19,6 +19,13 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Rate limits are per client IP. Behind a reverse proxy / load balancer, set TRUST_PROXY
+// (e.g. 1 = trust one hop) so req.ip is the client, not the proxy.
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  app.set('trust proxy', Number.isInteger(hops) ? hops : process.env.TRUST_PROXY);
+}
+
 // Middleware
 app.use(helmet());
 app.use(

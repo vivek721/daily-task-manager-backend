@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import { subagentController } from '../controllers/subagentController';
 import { authenticateToken } from '../middleware/auth';
+import { apiLimiter } from '../middleware/rateLimit';
 
 const router = Router();
 
-// Apply required authentication to all routes
+// Rate limit, then require authentication, on all routes
+router.use(apiLimiter);
 router.use(authenticateToken);
 
 // Subagent CRUD operations

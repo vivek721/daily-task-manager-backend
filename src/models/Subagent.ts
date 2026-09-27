@@ -55,7 +55,20 @@ export class SubagentModel {
     const values: any[] = [];
     let paramCount = 1;
 
-    Object.entries(data).forEach(([key, value]) => {
+    // Only known columns are written; other body keys are ignored so they can't be
+    // interpolated into the SQL as column names.
+    const updatableColumns: ReadonlyArray<keyof UpdateSubagentInput> = [
+      'name',
+      'description',
+      'capabilities',
+      'status',
+      'load_capacity',
+      'specialization',
+      'priority_preference'
+    ];
+
+    updatableColumns.forEach((key) => {
+      const value = data[key];
       if (value !== undefined) {
         fields.push(`${key} = $${paramCount}`);
         values.push(value);
@@ -113,29 +126,37 @@ export class SubagentModel {
     return result.rows;
   }
 
-  async getSubagentAssignments(subagentId: string): Promise<SubagentAssignment[]> {
+  // Active assignments of a subagent, limited to tasks owned by the given user
+  async getSubagentAssignments(subagentId: string, userId: string): Promise<SubagentAssignment[]> {
     const query = `
       SELECT sa.*, t.title as task_title, t.priority as task_priority
       FROM subagent_assignments sa
       JOIN tasks t ON sa.task_id = t.id
-      WHERE sa.subagent_id = $1 AND sa.status IN ('assigned', 'in_progress')
+      WHERE sa.subagent_id = $1
+        AND t.user_id = $2
+        AND sa.status IN ('assigned', 'in_progress')
       ORDER BY sa.assigned_at DESC
     `;
-    const result = await this.pool.query(query, [subagentId]);
+    const result = await this.pool.query(query, [subagentId, userId]);
     return result.rows;
   }
 
+  // Only updates the assignment if its task belongs to the given user
   async updateAssignmentStatus(
-    assignmentId: string, 
-    status: SubagentAssignment['status']
+    assignmentId: string,
+    status: SubagentAssignment['status'],
+    userId: string
   ): Promise<SubagentAssignment | null> {
     const query = `
-      UPDATE subagent_assignments 
+      UPDATE subagent_assignments sa
       SET status = $1, completed_at = CASE WHEN $1 IN ('completed', 'failed') THEN CURRENT_TIMESTAMP ELSE NULL END
-      WHERE id = $2
-      RETURNING *
+      FROM tasks t
+      WHERE sa.id = $2
+        AND sa.task_id = t.id
+        AND t.user_id = $3
+      RETURNING sa.*
     `;
-    const result = await this.pool.query(query, [status, assignmentId]);
+    const result = await this.pool.query(query, [status, assignmentId, userId]);
     return result.rows[0] || null;
   }
 
@@ -288,7 +309,8 @@ export class SubagentModel {
     return result.rows;
   }
 
-  async getAssignmentHistory(limit: number = 50): Promise<any[]> {
+  // Assignment history limited to tasks owned by the given user
+  async getAssignmentHistory(userId: string, limit: number = 50): Promise<any[]> {
     const query = `
       SELECT 
         sa.*,
@@ -300,10 +322,11 @@ export class SubagentModel {
       FROM subagent_assignments sa
       JOIN subagents s ON sa.subagent_id = s.id
       JOIN tasks t ON sa.task_id = t.id
+      WHERE t.user_id = $1
       ORDER BY sa.assigned_at DESC
-      LIMIT $1
+      LIMIT $2
     `;
-    const result = await this.pool.query(query, [limit]);
+    const result = await this.pool.query(query, [userId, limit]);
     return result.rows;
   }
 }

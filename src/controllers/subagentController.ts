@@ -1,6 +1,8 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { SubagentModel } from '../models/Subagent';
 import pool from '../config/database';
+import { TaskModel } from '../models/Task';
+import { AuthenticatedRequest } from '../middleware/auth';
 import { 
   CreateSubagentInput, 
   UpdateSubagentInput, 
@@ -12,7 +14,7 @@ const subagentModel = new SubagentModel(pool);
 
 export const subagentController = {
   // Subagent CRUD operations
-  async getAllSubagents(req: Request, res: Response): Promise<void> {
+  async getAllSubagents(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const subagents = await subagentModel.findAllSubagents();
       res.json({
@@ -29,7 +31,7 @@ export const subagentController = {
     }
   },
 
-  async getSubagentById(req: Request, res: Response): Promise<void> {
+  async getSubagentById(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const subagent = await subagentModel.findSubagentById(id);
@@ -55,7 +57,7 @@ export const subagentController = {
     }
   },
 
-  async createSubagent(req: Request, res: Response): Promise<void> {
+  async createSubagent(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const subagentData: CreateSubagentInput = req.body;
 
@@ -89,7 +91,7 @@ export const subagentController = {
     }
   },
 
-  async updateSubagent(req: Request, res: Response): Promise<void> {
+  async updateSubagent(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const updateData: UpdateSubagentInput = req.body;
@@ -118,7 +120,7 @@ export const subagentController = {
     }
   },
 
-  async deleteSubagent(req: Request, res: Response): Promise<void> {
+  async deleteSubagent(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
       const deleted = await subagentModel.deleteSubagent(id);
@@ -145,7 +147,7 @@ export const subagentController = {
   },
 
   // Assignment operations
-  async assignTaskToSubagent(req: Request, res: Response): Promise<void> {
+  async assignTaskToSubagent(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { taskId, subagentId } = req.params;
       const { reason, metadata } = req.body;
@@ -158,9 +160,19 @@ export const subagentController = {
         return;
       }
 
+      // Users may only assign their own tasks
+      const task = await TaskModel.findById(taskId, req.user!.id);
+      if (!task) {
+        res.status(404).json({
+          success: false,
+          message: 'Task not found'
+        });
+        return;
+      }
+
       const assignment = await subagentModel.assignTaskToSubagent(
-        taskId, 
-        subagentId, 
+        taskId,
+        subagentId,
         reason, 
         metadata
       );
@@ -186,9 +198,20 @@ export const subagentController = {
     }
   },
 
-  async getTaskAssignments(req: Request, res: Response): Promise<void> {
+  async getTaskAssignments(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { taskId } = req.params;
+
+      // Users may only see assignments of their own tasks (soft-deleted included)
+      const task = await TaskModel.findById(taskId, req.user!.id, true);
+      if (!task) {
+        res.status(404).json({
+          success: false,
+          message: 'Task not found'
+        });
+        return;
+      }
+
       const assignments = await subagentModel.getTaskAssignments(taskId);
 
       res.json({
@@ -205,10 +228,10 @@ export const subagentController = {
     }
   },
 
-  async getSubagentAssignments(req: Request, res: Response): Promise<void> {
+  async getSubagentAssignments(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { subagentId } = req.params;
-      const assignments = await subagentModel.getSubagentAssignments(subagentId);
+      const assignments = await subagentModel.getSubagentAssignments(subagentId, req.user!.id);
 
       res.json({
         success: true,
@@ -224,7 +247,7 @@ export const subagentController = {
     }
   },
 
-  async updateAssignmentStatus(req: Request, res: Response): Promise<void> {
+  async updateAssignmentStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { assignmentId } = req.params;
       const { status } = req.body;
@@ -237,7 +260,7 @@ export const subagentController = {
         return;
       }
 
-      const assignment = await subagentModel.updateAssignmentStatus(assignmentId, status);
+      const assignment = await subagentModel.updateAssignmentStatus(assignmentId, status, req.user!.id);
 
       if (!assignment) {
         res.status(404).json({
@@ -262,15 +285,14 @@ export const subagentController = {
   },
 
   // Auto-assignment
-  async autoAssignTask(req: Request, res: Response): Promise<void> {
+  async autoAssignTask(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { taskId } = req.params;
       
-      // Get task details
-      const taskQuery = 'SELECT * FROM tasks WHERE id = $1 AND deleted_at IS NULL';
-      const taskResult = await pool.query(taskQuery, [taskId]);
-      
-      if (taskResult.rows.length === 0) {
+      // Get task details (only the caller's own, non-deleted tasks)
+      const task = await TaskModel.findById(taskId, req.user!.id);
+
+      if (!task) {
         res.status(404).json({
           success: false,
           message: 'Task not found'
@@ -278,7 +300,6 @@ export const subagentController = {
         return;
       }
 
-      const task = taskResult.rows[0];
       const match = await subagentModel.evaluateTaskForRules(task);
 
       if (!match) {
@@ -315,7 +336,7 @@ export const subagentController = {
   },
 
   // Assignment Rules
-  async getAllAssignmentRules(req: Request, res: Response): Promise<void> {
+  async getAllAssignmentRules(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const rules = await subagentModel.findAllAssignmentRules();
       res.json({
@@ -332,7 +353,7 @@ export const subagentController = {
     }
   },
 
-  async createAssignmentRule(req: Request, res: Response): Promise<void> {
+  async createAssignmentRule(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const ruleData: CreateAssignmentRuleInput = req.body;
 
@@ -360,7 +381,7 @@ export const subagentController = {
   },
 
   // Statistics and monitoring
-  async getSubagentStats(req: Request, res: Response): Promise<void> {
+  async getSubagentStats(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const stats = await subagentModel.getSubagentStats();
       res.json({
@@ -376,10 +397,10 @@ export const subagentController = {
     }
   },
 
-  async getAssignmentHistory(req: Request, res: Response): Promise<void> {
+  async getAssignmentHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
-      const history = await subagentModel.getAssignmentHistory(limit);
+      const history = await subagentModel.getAssignmentHistory(req.user!.id, limit);
       
       res.json({
         success: true,

@@ -96,7 +96,6 @@ jobs:
           DB_USER: perf_test_user
           DB_PASSWORD: perf_test_password
           JWT_SECRET: perf-test-secret
-          SESSION_SECRET: perf-session-secret
           GOOGLE_CLIENT_ID: perf-client-id
           GOOGLE_CLIENT_SECRET: perf-client-secret
           

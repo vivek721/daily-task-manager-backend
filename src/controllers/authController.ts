@@ -3,6 +3,7 @@ import jwt, { SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { CreateLocalUserInput, LoginCredentials } from '../types/User';
 import { UserModel } from '../models/User';
+import { isValidEmail } from '../utils/email';
 import '../types/express';
 
 // Claims signed into every JWT this API issues
@@ -115,9 +116,8 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    // Email validation (linear-time; see src/utils/email.ts)
+    if (!isValidEmail(email)) {
       res.status(400).json({ error: 'Invalid email format' });
       return;
     }

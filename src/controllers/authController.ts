@@ -60,16 +60,10 @@ export const getProfile = (req: Request, res: Response): void => {
   }
 };
 
-export const logout = (req: Request, res: Response): void => {
-  req.logout(err => {
-    if (err) {
-      console.error('Error during logout:', err);
-      res.status(500).json({ error: 'Logout failed' });
-      return;
-    }
-
-    res.json({ success: true, message: 'Logged out successfully' });
-  });
+// Auth is a stateless JWT, so there is no server-side session to end: the client logs
+// out by discarding its token. Kept so existing clients get the same response.
+export const logout = (_req: Request, res: Response): void => {
+  res.json({ success: true, message: 'Logged out successfully' });
 };
 
 export const verifyToken = (req: Request, res: Response): void => {

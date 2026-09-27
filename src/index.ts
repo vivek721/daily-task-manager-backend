@@ -5,7 +5,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
-import session from 'express-session';
 
 import { initDatabase } from './config/database';
 import taskRoutes from './routes/taskRoutes';
@@ -13,6 +12,7 @@ import subagentRoutes from './routes/subagentRoutes';
 import authRoutes from './routes/authRoutes';
 import { errorHandler, notFound } from './middleware/errorHandler';
 import passport from './config/passport';
+import { getMissingSecrets } from './config/env';
 
 dotenv.config();
 
@@ -31,22 +31,10 @@ app.use(morgan('combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Session configuration for Passport
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || 'your-session-secret',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    },
-  })
-);
-
-// Initialize Passport
+// Passport is only used for the Google OAuth handshake, which is stateless
+// (session: false on the routes; the callback issues a JWT). API requests authenticate
+// with a Bearer JWT, so there is no session cookie to protect against CSRF.
 app.use(passport.initialize());
-app.use(passport.session());
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -69,6 +57,16 @@ app.use(errorHandler);
 
 // Start server
 const startServer = async (): Promise<void> => {
+  const missingSecrets = getMissingSecrets();
+  if (missingSecrets.length > 0) {
+    const message = `Missing or placeholder secrets: ${missingSecrets.join(', ')}`;
+    if (process.env.NODE_ENV === 'production') {
+      console.error(`${message}. Refusing to start in production.`);
+      process.exit(1);
+    }
+    console.warn(`${message}. Authentication will not work until they are set.`);
+  }
+
   try {
     // Initialize database
     await initDatabase();

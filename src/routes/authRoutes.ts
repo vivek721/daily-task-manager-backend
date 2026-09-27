@@ -13,17 +13,22 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 
-// Google OAuth routes
+// Google OAuth routes. Stateless: no login session is created; the callback handler
+// signs a JWT and redirects to the frontend with it.
 // @types/passport types authenticate() as returning any
 router.get(
   '/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] }) as RequestHandler
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    session: false,
+  }) as RequestHandler
 );
 
 router.get(
   '/google/callback',
   passport.authenticate('google', {
     failureRedirect: `${process.env.FRONTEND_URL}/login?error=oauth_failed`,
+    session: false,
   }) as RequestHandler,
   googleCallback
 );

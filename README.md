@@ -195,8 +195,8 @@ On startup, the API creates the `tasks` table (with indexes and an `updated_at` 
 | `npm run build` | Clean `dist/` and compile TypeScript |
 | `npm start` | Run the compiled app (`dist/index.js`) |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm run lint` / `npm run lint:fix` | ESLint on `src/**/*.ts` |
-| `npm run format` / `npm run format:check` | Prettier |
+| `npm run lint` / `npm run lint:fix` | ESLint (type-aware) on every `.ts` file under `src/`, tests included. Errors fail; warnings don't |
+| `npm run format` / `npm run format:check` | Prettier on `src/`. Prettier owns formatting; ESLint has no style rules |
 | `npm test` / `npm run test:watch` / `npm run test:coverage` / `npm run test:ci` | Jest |
 | `npm run ci` | typecheck, lint, test:ci, build |
 | `npm run docker:build` / `npm run docker:run` | Build and run the Docker image |
@@ -231,10 +231,12 @@ src/__tests__/
 │   ├── taskOwnership.test.ts             # every task handler passes the user ID; other users' tasks give 404
 │   ├── subagentController.test.ts        # /api/subagents requires a token; assignments are owner-only
 │   └── devLogin.test.ts                  # dev-login is development-only and its token passes authenticateToken
-└── models/Task.test.ts                   # generated SQL binds user_id; update ignores non-updatable columns
+└── models/
+    ├── Task.test.ts                      # generated SQL binds user_id; update ignores non-updatable columns
+    └── Subagent.test.ts                  # JSONB rule columns, rule matching
 ```
 
-Coverage is still low (about 36% of statements). `jest.config.js` sets the global threshold to 30% statements, 25% branches, 40% functions and 30% lines, just under what the suite reaches, so `npm run test:ci` passes. Raise it as tests are added.
+Coverage is still low (about 40% of statements). `jest.config.js` sets the global threshold to 30% statements, 25% branches, 40% functions and 30% lines, just under what the suite reaches, so `npm run test:ci` passes. Raise it as tests are added.
 
 ## CI / GitHub Actions
 
@@ -242,19 +244,18 @@ Workflows in `.github/workflows/`:
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| `ci.yml` (Continuous Integration) | push / PR to `master`, `develop` | Typecheck + build, ESLint + Prettier check, Jest against a Postgres 15 service (uploads coverage to Codecov), Docker build + `/health` smoke test, `npm audit` + CodeQL, SQL init-script check |
+| `ci.yml` (Continuous Integration) | push / PR to `master`, `develop` | Typecheck + build, ESLint + Prettier check, Jest against a Postgres 15 service (uploads coverage to Codecov), Docker build + smoke test (runs the image against a throwaway Postgres 15 service and checks `/health` and a 401 from `/api/tasks`), `npm audit` + CodeQL, SQL init-script check |
 | `deploy.yml` (Deploy to Production) | push to `master`, `v*` tags, manual | Builds a multi-arch image and pushes it to GHCR. The staging and production deploy steps are placeholders. |
-| `quality.yml` (Code Quality & Performance) | push / PR to `master`, `develop`, weekly | SonarCloud scan (needs `SONAR_TOKEN` and a SonarCloud org), Artillery load test of `/health`, complexity and build-size reports |
+| `quality.yml` (Code Quality & Performance) | push / PR to `master`, `develop`, weekly | SonarCloud scan (skipped unless the `SONAR_TOKEN` secret is set; `sonar-project.properties` also needs a real organization), Artillery load test of `/health`, complexity and build-size reports |
 | `dependency-update.yml` (Dependency Updates) | weekly, manual | `npm audit` / `npm outdated` report. When started manually, it opens a PR with minor dependency updates. |
 
-Locally, typecheck and tests pass. Some CI jobs will still fail on existing issues: ESLint reports errors across the codebase (mostly `comma-dangle` and `no-unsafe-*` on `any`), `prettier --check` flags most source files, `npm audit --audit-level=moderate` reports vulnerable dependencies, and the Docker smoke test starts the container without a database, so the app exits during startup before `/health` can answer.
+The `ci.yml` checks that can run locally all pass: typecheck, build, lint (0 errors), `format:check`, `test:ci` (with coverage thresholds) and `npm audit --audit-level=moderate` (0 vulnerabilities). The Docker smoke test, CodeQL and the `quality.yml` jobs need GitHub Actions and have not been run yet.
 
 ## Known limitations
 
 - The database schema is only partly bootstrapped by the app (see [Set up the database](#4-set-up-the-database)), and there is no migration tool yet.
 - There are no roles. Any signed-in user can create, edit and delete the shared subagents and assignment rules.
 - `/history/all` returns history grouped by task, not globally sorted by change time, because `get_task_history()`'s output columns are defined outside this repo.
-- The lint, format, audit and Docker smoke-test CI jobs fail on existing issues (see [CI / GitHub Actions](#ci--github-actions)).
 - There is no rate limiting.
 
 ## Roadmap (not yet built)
@@ -262,7 +263,7 @@ Locally, typecheck and tests pass. Some CI jobs will still fail on existing issu
 - Migrations for the full schema (users, soft delete, history functions)
 - An admin role for managing subagents and assignment rules
 - Rate limiting and use of the `BCRYPT_ROUNDS` / logging settings from `.env.example`
-- Broader test coverage (auth, validation, models), and fixing the existing lint and formatting errors
+- Broader test coverage (auth, validation, models)
 
 ## License
 

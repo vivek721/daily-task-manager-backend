@@ -51,7 +51,7 @@ export const testUtils = {
     created_at: new Date(),
     updated_at: new Date(),
   }),
-  
+
   // Mock authenticated request
   mockAuthRequest: (user = generateTestUser()) => ({
     user,

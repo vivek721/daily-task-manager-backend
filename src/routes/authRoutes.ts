@@ -1,17 +1,26 @@
 import express, { Request, Response } from 'express';
 import passport from '../config/passport';
-import { googleCallback, getProfile, logout, verifyToken, devLogin, signup, signin } from '../controllers/authController';
+import {
+  googleCallback,
+  getProfile,
+  logout,
+  verifyToken,
+  devLogin,
+  signup,
+  signin,
+} from '../controllers/authController';
 import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
 
 const router = express.Router();
 
 // Google OAuth routes
-router.get('/google', 
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-router.get('/google/callback',
-  passport.authenticate('google', { failureRedirect: `${process.env.FRONTEND_URL}/login?error=oauth_failed` }),
+router.get(
+  '/google/callback',
+  passport.authenticate('google', {
+    failureRedirect: `${process.env.FRONTEND_URL}/login?error=oauth_failed`,
+  }),
   googleCallback as any
 );
 

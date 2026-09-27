@@ -1,14 +1,14 @@
 import { Pool } from 'pg';
-import { 
-  Subagent, 
-  SubagentAssignment, 
-  AssignmentRule, 
-  CreateSubagentInput, 
+import {
+  Subagent,
+  SubagentAssignment,
+  AssignmentRule,
+  CreateSubagentInput,
   UpdateSubagentInput,
   CreateAssignmentRuleInput,
   UpdateAssignmentRuleInput,
   TriggerCondition,
-  AssignmentCriteria
+  AssignmentCriteria,
 } from '../types/Subagent';
 
 export class SubagentModel {
@@ -43,9 +43,9 @@ export class SubagentModel {
       data.capabilities,
       data.load_capacity,
       data.specialization,
-      data.priority_preference
+      data.priority_preference,
     ];
-    
+
     const result = await this.pool.query(query, values);
     return result.rows[0];
   }
@@ -64,10 +64,10 @@ export class SubagentModel {
       'status',
       'load_capacity',
       'specialization',
-      'priority_preference'
+      'priority_preference',
     ];
 
-    updatableColumns.forEach((key) => {
+    updatableColumns.forEach(key => {
       const value = data[key];
       if (value !== undefined) {
         fields.push(`${key} = $${paramCount}`);
@@ -98,8 +98,8 @@ export class SubagentModel {
 
   // Assignment operations
   async assignTaskToSubagent(
-    taskId: string, 
-    subagentId: string, 
+    taskId: string,
+    subagentId: string,
     reason: string,
     metadata?: Record<string, any>
   ): Promise<SubagentAssignment> {
@@ -109,7 +109,7 @@ export class SubagentModel {
       RETURNING *
     `;
     const values = [taskId, subagentId, reason, JSON.stringify(metadata || {})];
-    
+
     const result = await this.pool.query(query, values);
     return result.rows[0];
   }
@@ -171,7 +171,7 @@ export class SubagentModel {
     return result.rows.map(row => ({
       ...row,
       trigger_conditions: JSON.parse(row.trigger_conditions),
-      assignment_criteria: JSON.parse(row.assignment_criteria)
+      assignment_criteria: JSON.parse(row.assignment_criteria),
     }));
   }
 
@@ -186,15 +186,15 @@ export class SubagentModel {
       data.description,
       JSON.stringify(data.trigger_conditions),
       JSON.stringify(data.assignment_criteria),
-      data.priority
+      data.priority,
     ];
-    
+
     const result = await this.pool.query(query, values);
     const row = result.rows[0];
     return {
       ...row,
       trigger_conditions: JSON.parse(row.trigger_conditions),
-      assignment_criteria: JSON.parse(row.assignment_criteria)
+      assignment_criteria: JSON.parse(row.assignment_criteria),
     };
   }
 
@@ -241,9 +241,11 @@ export class SubagentModel {
     return result.rows;
   }
 
-  async evaluateTaskForRules(task: any): Promise<{ rule: AssignmentRule; subagent: Subagent } | null> {
+  async evaluateTaskForRules(
+    task: any
+  ): Promise<{ rule: AssignmentRule; subagent: Subagent } | null> {
     const rules = await this.findAllAssignmentRules();
-    
+
     for (const rule of rules) {
       if (this.doesTaskMatchRule(task, rule)) {
         const eligibleSubagents = await this.findEligibleSubagents(rule.assignment_criteria);
@@ -252,7 +254,7 @@ export class SubagentModel {
         }
       }
     }
-    
+
     return null;
   }
 
@@ -262,7 +264,9 @@ export class SubagentModel {
       if (!fieldValue) return false;
 
       const value = condition.case_sensitive ? fieldValue : fieldValue.toLowerCase();
-      const conditionValue = condition.case_sensitive ? condition.value : condition.value.toLowerCase();
+      const conditionValue = condition.case_sensitive
+        ? condition.value
+        : condition.value.toLowerCase();
 
       switch (condition.operator) {
         case 'equals':

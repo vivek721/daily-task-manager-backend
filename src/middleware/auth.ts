@@ -12,7 +12,11 @@ export interface AuthenticatedRequest extends Request {
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const authenticateToken = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
@@ -42,7 +46,7 @@ export const authenticateToken = async (req: AuthenticatedRequest, res: Response
     req.user = {
       id: user.id,
       email: user.email,
-      name: user.name
+      name: user.name,
     };
 
     next();
@@ -56,7 +60,11 @@ export const authenticateToken = async (req: AuthenticatedRequest, res: Response
   }
 };
 
-export const optionalAuth = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+export const optionalAuth = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
@@ -64,12 +72,12 @@ export const optionalAuth = async (req: AuthenticatedRequest, res: Response, nex
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
       const user = await UserModel.findById(decoded.userId);
-      
+
       if (user) {
         req.user = {
           id: user.id,
           email: user.email,
-          name: user.name
+          name: user.name,
         };
       }
     }

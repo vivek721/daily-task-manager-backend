@@ -84,7 +84,7 @@ describe('Subagent Controller - task ownership', () => {
       expect(responseStatus).toHaveBeenCalledWith(201);
     });
 
-    it('returns 404 and assigns nothing for another user\'s task', async () => {
+    it("returns 404 and assigns nothing for another user's task", async () => {
       MockedTaskModel.findById = jest.fn().mockResolvedValue(null);
 
       await call(subagentController.assignTaskToSubagent);
@@ -95,7 +95,7 @@ describe('Subagent Controller - task ownership', () => {
   });
 
   describe('getTaskAssignments', () => {
-    it('returns 404 and no assignments for another user\'s task', async () => {
+    it("returns 404 and no assignments for another user's task", async () => {
       MockedTaskModel.findById = jest.fn().mockResolvedValue(null);
 
       await call(subagentController.getTaskAssignments);
@@ -107,7 +107,7 @@ describe('Subagent Controller - task ownership', () => {
   });
 
   describe('autoAssignTask', () => {
-    it('returns 404 and does not evaluate rules for another user\'s task', async () => {
+    it("returns 404 and does not evaluate rules for another user's task", async () => {
       MockedTaskModel.findById = jest.fn().mockResolvedValue(null);
 
       await call(subagentController.autoAssignTask);
@@ -119,7 +119,7 @@ describe('Subagent Controller - task ownership', () => {
   });
 
   describe('assignment listings and updates', () => {
-    it('scopes a subagent\'s assignments to the user', async () => {
+    it("scopes a subagent's assignments to the user", async () => {
       subagentProto.getSubagentAssignments.mockResolvedValue([]);
 
       await call(subagentController.getSubagentAssignments);
@@ -135,7 +135,7 @@ describe('Subagent Controller - task ownership', () => {
       expect(subagentProto.getAssignmentHistory).toHaveBeenCalledWith(USER_ID, 50);
     });
 
-    it('returns 404 when updating an assignment of another user\'s task', async () => {
+    it("returns 404 when updating an assignment of another user's task", async () => {
       subagentProto.updateAssignmentStatus.mockResolvedValue(null);
 
       await call(subagentController.updateAssignmentStatus);

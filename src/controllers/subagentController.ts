@@ -3,11 +3,11 @@ import { SubagentModel } from '../models/Subagent';
 import pool from '../config/database';
 import { TaskModel } from '../models/Task';
 import { AuthenticatedRequest } from '../middleware/auth';
-import { 
-  CreateSubagentInput, 
-  UpdateSubagentInput, 
-  CreateAssignmentRuleInput, 
-  UpdateAssignmentRuleInput 
+import {
+  CreateSubagentInput,
+  UpdateSubagentInput,
+  CreateAssignmentRuleInput,
+  UpdateAssignmentRuleInput,
 } from '../types/Subagent';
 
 const subagentModel = new SubagentModel(pool);
@@ -20,13 +20,13 @@ export const subagentController = {
       res.json({
         success: true,
         data: subagents,
-        count: subagents.length
+        count: subagents.length,
       });
     } catch (error) {
       console.error('Error getting subagents:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve subagents'
+        message: 'Failed to retrieve subagents',
       });
     }
   },
@@ -39,20 +39,20 @@ export const subagentController = {
       if (!subagent) {
         res.status(404).json({
           success: false,
-          message: 'Subagent not found'
+          message: 'Subagent not found',
         });
         return;
       }
 
       res.json({
         success: true,
-        data: subagent
+        data: subagent,
       });
     } catch (error) {
       console.error('Error getting subagent by ID:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve subagent'
+        message: 'Failed to retrieve subagent',
       });
     }
   },
@@ -64,7 +64,7 @@ export const subagentController = {
       if (!subagentData.name || !subagentData.type) {
         res.status(400).json({
           success: false,
-          message: 'Subagent name and type are required'
+          message: 'Subagent name and type are required',
         });
         return;
       }
@@ -73,19 +73,20 @@ export const subagentController = {
       res.status(201).json({
         success: true,
         data: subagent,
-        message: 'Subagent created successfully'
+        message: 'Subagent created successfully',
       });
     } catch (error: any) {
       console.error('Error creating subagent:', error);
-      if (error.code === '23505') { // Unique constraint violation
+      if (error.code === '23505') {
+        // Unique constraint violation
         res.status(409).json({
           success: false,
-          message: 'Subagent name already exists'
+          message: 'Subagent name already exists',
         });
       } else {
         res.status(500).json({
           success: false,
-          message: 'Failed to create subagent'
+          message: 'Failed to create subagent',
         });
       }
     }
@@ -101,7 +102,7 @@ export const subagentController = {
       if (!subagent) {
         res.status(404).json({
           success: false,
-          message: 'Subagent not found'
+          message: 'Subagent not found',
         });
         return;
       }
@@ -109,13 +110,13 @@ export const subagentController = {
       res.json({
         success: true,
         data: subagent,
-        message: 'Subagent updated successfully'
+        message: 'Subagent updated successfully',
       });
     } catch (error) {
       console.error('Error updating subagent:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to update subagent'
+        message: 'Failed to update subagent',
       });
     }
   },
@@ -128,20 +129,20 @@ export const subagentController = {
       if (!deleted) {
         res.status(404).json({
           success: false,
-          message: 'Subagent not found'
+          message: 'Subagent not found',
         });
         return;
       }
 
       res.json({
         success: true,
-        message: 'Subagent deleted successfully'
+        message: 'Subagent deleted successfully',
       });
     } catch (error) {
       console.error('Error deleting subagent:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to delete subagent'
+        message: 'Failed to delete subagent',
       });
     }
   },
@@ -155,7 +156,7 @@ export const subagentController = {
       if (!reason) {
         res.status(400).json({
           success: false,
-          message: 'Assignment reason is required'
+          message: 'Assignment reason is required',
         });
         return;
       }
@@ -165,7 +166,7 @@ export const subagentController = {
       if (!task) {
         res.status(404).json({
           success: false,
-          message: 'Task not found'
+          message: 'Task not found',
         });
         return;
       }
@@ -173,26 +174,27 @@ export const subagentController = {
       const assignment = await subagentModel.assignTaskToSubagent(
         taskId,
         subagentId,
-        reason, 
+        reason,
         metadata
       );
 
       res.status(201).json({
         success: true,
         data: assignment,
-        message: 'Task assigned successfully'
+        message: 'Task assigned successfully',
       });
     } catch (error: any) {
       console.error('Error assigning task:', error);
-      if (error.code === '23505') { // Unique constraint violation
+      if (error.code === '23505') {
+        // Unique constraint violation
         res.status(409).json({
           success: false,
-          message: 'Task is already assigned to this subagent'
+          message: 'Task is already assigned to this subagent',
         });
       } else {
         res.status(500).json({
           success: false,
-          message: 'Failed to assign task'
+          message: 'Failed to assign task',
         });
       }
     }
@@ -207,7 +209,7 @@ export const subagentController = {
       if (!task) {
         res.status(404).json({
           success: false,
-          message: 'Task not found'
+          message: 'Task not found',
         });
         return;
       }
@@ -217,13 +219,13 @@ export const subagentController = {
       res.json({
         success: true,
         data: assignments,
-        count: assignments.length
+        count: assignments.length,
       });
     } catch (error) {
       console.error('Error getting task assignments:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve task assignments'
+        message: 'Failed to retrieve task assignments',
       });
     }
   },
@@ -236,13 +238,13 @@ export const subagentController = {
       res.json({
         success: true,
         data: assignments,
-        count: assignments.length
+        count: assignments.length,
       });
     } catch (error) {
       console.error('Error getting subagent assignments:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve subagent assignments'
+        message: 'Failed to retrieve subagent assignments',
       });
     }
   },
@@ -255,17 +257,21 @@ export const subagentController = {
       if (!status) {
         res.status(400).json({
           success: false,
-          message: 'Status is required'
+          message: 'Status is required',
         });
         return;
       }
 
-      const assignment = await subagentModel.updateAssignmentStatus(assignmentId, status, req.user!.id);
+      const assignment = await subagentModel.updateAssignmentStatus(
+        assignmentId,
+        status,
+        req.user!.id
+      );
 
       if (!assignment) {
         res.status(404).json({
           success: false,
-          message: 'Assignment not found'
+          message: 'Assignment not found',
         });
         return;
       }
@@ -273,13 +279,13 @@ export const subagentController = {
       res.json({
         success: true,
         data: assignment,
-        message: 'Assignment status updated successfully'
+        message: 'Assignment status updated successfully',
       });
     } catch (error) {
       console.error('Error updating assignment status:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to update assignment status'
+        message: 'Failed to update assignment status',
       });
     }
   },
@@ -288,14 +294,14 @@ export const subagentController = {
   async autoAssignTask(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { taskId } = req.params;
-      
+
       // Get task details (only the caller's own, non-deleted tasks)
       const task = await TaskModel.findById(taskId, req.user!.id);
 
       if (!task) {
         res.status(404).json({
           success: false,
-          message: 'Task not found'
+          message: 'Task not found',
         });
         return;
       }
@@ -305,7 +311,7 @@ export const subagentController = {
       if (!match) {
         res.json({
           success: false,
-          message: 'No suitable subagent found for this task'
+          message: 'No suitable subagent found for this task',
         });
         return;
       }
@@ -322,15 +328,15 @@ export const subagentController = {
         data: {
           assignment,
           subagent: match.subagent,
-          rule: match.rule
+          rule: match.rule,
         },
-        message: 'Task auto-assigned successfully'
+        message: 'Task auto-assigned successfully',
       });
     } catch (error) {
       console.error('Error auto-assigning task:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to auto-assign task'
+        message: 'Failed to auto-assign task',
       });
     }
   },
@@ -342,13 +348,13 @@ export const subagentController = {
       res.json({
         success: true,
         data: rules,
-        count: rules.length
+        count: rules.length,
       });
     } catch (error) {
       console.error('Error getting assignment rules:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve assignment rules'
+        message: 'Failed to retrieve assignment rules',
       });
     }
   },
@@ -360,7 +366,7 @@ export const subagentController = {
       if (!ruleData.name || !ruleData.trigger_conditions || !ruleData.assignment_criteria) {
         res.status(400).json({
           success: false,
-          message: 'Rule name, trigger conditions, and assignment criteria are required'
+          message: 'Rule name, trigger conditions, and assignment criteria are required',
         });
         return;
       }
@@ -369,13 +375,13 @@ export const subagentController = {
       res.status(201).json({
         success: true,
         data: rule,
-        message: 'Assignment rule created successfully'
+        message: 'Assignment rule created successfully',
       });
     } catch (error) {
       console.error('Error creating assignment rule:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to create assignment rule'
+        message: 'Failed to create assignment rule',
       });
     }
   },
@@ -386,13 +392,13 @@ export const subagentController = {
       const stats = await subagentModel.getSubagentStats();
       res.json({
         success: true,
-        data: stats
+        data: stats,
       });
     } catch (error) {
       console.error('Error getting subagent stats:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve subagent statistics'
+        message: 'Failed to retrieve subagent statistics',
       });
     }
   },
@@ -401,18 +407,18 @@ export const subagentController = {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
       const history = await subagentModel.getAssignmentHistory(req.user!.id, limit);
-      
+
       res.json({
         success: true,
         data: history,
-        count: history.length
+        count: history.length,
       });
     } catch (error) {
       console.error('Error getting assignment history:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve assignment history'
+        message: 'Failed to retrieve assignment history',
       });
     }
-  }
+  },
 };

@@ -34,9 +34,7 @@ describe('Task Controller - ownership scoping', () => {
 
   const expectNotFound = (): void => {
     expect(responseStatus).toHaveBeenCalledWith(404);
-    expect(responseJson).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false })
-    );
+    expect(responseJson).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
   };
 
   beforeEach(() => {
@@ -86,7 +84,7 @@ describe('Task Controller - ownership scoping', () => {
   });
 
   describe('updateTask', () => {
-    it('updates only within the authenticated user\'s tasks', async () => {
+    it("updates only within the authenticated user's tasks", async () => {
       mockRequest.body = { title: 'Renamed' };
       MockedTaskModel.update = jest.fn().mockResolvedValue({ ...ownTask, title: 'Renamed' });
 
@@ -116,7 +114,7 @@ describe('Task Controller - ownership scoping', () => {
   });
 
   describe('toggleTaskComplete', () => {
-    it('toggles the task within the authenticated user\'s tasks', async () => {
+    it("toggles the task within the authenticated user's tasks", async () => {
       MockedTaskModel.findById = jest.fn().mockResolvedValue(ownTask);
       MockedTaskModel.update = jest.fn().mockResolvedValue({ ...ownTask, completed: true });
 
@@ -143,9 +141,9 @@ describe('Task Controller - ownership scoping', () => {
     ['restoreTask', 'restore', null],
   ] as const)('%s', (handlerName, modelMethod, notFoundValue) => {
     it('passes the task id and the authenticated user id to the model', async () => {
-      (MockedTaskModel as any)[modelMethod] = jest.fn().mockResolvedValue(
-        modelMethod === 'restore' ? ownTask : true
-      );
+      (MockedTaskModel as any)[modelMethod] = jest
+        .fn()
+        .mockResolvedValue(modelMethod === 'restore' ? ownTask : true);
 
       await call(taskController[handlerName]);
 

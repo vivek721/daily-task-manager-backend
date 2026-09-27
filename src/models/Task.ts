@@ -12,7 +12,7 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof UpdateTaskInput> = [
   'priority',
   'due_date',
   'category',
-  'tags'
+  'tags',
 ];
 
 // Overdue = due before today, or (no due date and) created before today.
@@ -26,14 +26,7 @@ const OVERDUE_CONDITION = `
 // `user_id`, so one user can never see or change another user's tasks.
 export class TaskModel {
   static async create(taskData: CreateTaskInput, userId: string): Promise<Task> {
-    const {
-      title,
-      description,
-      priority = 'medium',
-      due_date,
-      category,
-      tags
-    } = taskData;
+    const { title, description, priority = 'medium', due_date, category, tags } = taskData;
 
     const query = `
       INSERT INTO tasks (title, description, priority, due_date, category, tags, user_id)
@@ -48,7 +41,7 @@ export class TaskModel {
       due_date ? new Date(due_date) : null,
       category || null,
       tags || [],
-      userId
+      userId,
     ];
 
     try {
@@ -145,7 +138,7 @@ export class TaskModel {
     const values: any[] = [];
     let paramCount = 0;
 
-    UPDATABLE_COLUMNS.forEach((key) => {
+    UPDATABLE_COLUMNS.forEach(key => {
       const value = updateData[key];
       if (value !== undefined) {
         paramCount++;
@@ -252,7 +245,7 @@ export class TaskModel {
       const result: QueryResult<Task> = await pool.query(query, [userId]);
       return result.rows;
     } catch (error) {
-      console.error('Error getting today\'s tasks:', error);
+      console.error("Error getting today's tasks:", error);
       throw error;
     }
   }

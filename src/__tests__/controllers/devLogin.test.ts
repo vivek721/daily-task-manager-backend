@@ -39,7 +39,7 @@ describe('devLogin', () => {
 
   it.each(['production', 'test', 'staging', undefined])(
     'returns 404 when NODE_ENV is %s',
-    async (env) => {
+    async env => {
       if (env === undefined) {
         delete process.env.NODE_ENV;
       } else {

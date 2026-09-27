@@ -12,7 +12,12 @@ export const taskController = {
   async getAllTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const filters: TaskFilters = {
-        completed: req.query.completed === 'true' ? true : req.query.completed === 'false' ? false : undefined,
+        completed:
+          req.query.completed === 'true'
+            ? true
+            : req.query.completed === 'false'
+              ? false
+              : undefined,
         priority: req.query.priority as 'low' | 'medium' | 'high' | undefined,
         category: req.query.category as string | undefined,
         limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
@@ -23,13 +28,13 @@ export const taskController = {
       res.json({
         success: true,
         data: tasks,
-        count: tasks.length
+        count: tasks.length,
       });
     } catch (error) {
       console.error('Error getting tasks:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve tasks'
+        message: 'Failed to retrieve tasks',
       });
     }
   },
@@ -41,13 +46,13 @@ export const taskController = {
       res.json({
         success: true,
         data: tasks,
-        count: tasks.length
+        count: tasks.length,
       });
     } catch (error) {
-      console.error('Error getting today\'s tasks:', error);
+      console.error("Error getting today's tasks:", error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve today\'s tasks'
+        message: "Failed to retrieve today's tasks",
       });
     }
   },
@@ -59,13 +64,13 @@ export const taskController = {
       res.json({
         success: true,
         data: tasks,
-        count: tasks.length
+        count: tasks.length,
       });
     } catch (error) {
       console.error('Error getting old tasks:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve old tasks'
+        message: 'Failed to retrieve old tasks',
       });
     }
   },
@@ -79,20 +84,20 @@ export const taskController = {
       if (!task) {
         res.status(404).json({
           success: false,
-          message: 'Task not found'
+          message: 'Task not found',
         });
         return;
       }
 
       res.json({
         success: true,
-        data: task
+        data: task,
       });
     } catch (error) {
       console.error('Error getting task by ID:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve task'
+        message: 'Failed to retrieve task',
       });
     }
   },
@@ -106,14 +111,14 @@ export const taskController = {
       if (!taskData.title || taskData.title.trim() === '') {
         res.status(400).json({
           success: false,
-          message: 'Task title is required'
+          message: 'Task title is required',
         });
         return;
       }
 
       console.log('Creating task for user:', req.user!.id);
       const task = await TaskModel.create(taskData, req.user!.id);
-      
+
       // Try to auto-assign the task
       try {
         const match = await subagentModel.evaluateTaskForRules(task);
@@ -130,17 +135,17 @@ export const taskController = {
         console.warn('Auto-assignment failed for task:', task.id, assignmentError);
         // Don't fail the task creation if auto-assignment fails
       }
-      
+
       res.status(201).json({
         success: true,
         data: task,
-        message: 'Task created successfully'
+        message: 'Task created successfully',
       });
     } catch (error) {
       console.error('Error creating task:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to create task'
+        message: 'Failed to create task',
       });
     }
   },
@@ -156,7 +161,7 @@ export const taskController = {
       if (!task) {
         res.status(404).json({
           success: false,
-          message: 'Task not found'
+          message: 'Task not found',
         });
         return;
       }
@@ -164,20 +169,20 @@ export const taskController = {
       res.json({
         success: true,
         data: task,
-        message: 'Task updated successfully'
+        message: 'Task updated successfully',
       });
     } catch (error) {
       if (error instanceof Error && error.message === 'No fields to update') {
         res.status(400).json({
           success: false,
-          message: 'No updatable fields provided'
+          message: 'No updatable fields provided',
         });
         return;
       }
       console.error('Error updating task:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to update task'
+        message: 'Failed to update task',
       });
     }
   },
@@ -191,20 +196,20 @@ export const taskController = {
       if (!deleted) {
         res.status(404).json({
           success: false,
-          message: 'Task not found'
+          message: 'Task not found',
         });
         return;
       }
 
       res.json({
         success: true,
-        message: 'Task deleted successfully'
+        message: 'Task deleted successfully',
       });
     } catch (error) {
       console.error('Error deleting task:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to delete task'
+        message: 'Failed to delete task',
       });
     }
   },
@@ -216,13 +221,13 @@ export const taskController = {
       res.json({
         success: true,
         message: `${count} old tasks marked as complete`,
-        count
+        count,
       });
     } catch (error) {
       console.error('Error marking old tasks complete:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to mark old tasks as complete'
+        message: 'Failed to mark old tasks as complete',
       });
     }
   },
@@ -233,13 +238,13 @@ export const taskController = {
       res.json({
         success: true,
         message: `${count} old tasks deleted`,
-        count
+        count,
       });
     } catch (error) {
       console.error('Error deleting old tasks:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to delete old tasks'
+        message: 'Failed to delete old tasks',
       });
     }
   },
@@ -250,13 +255,13 @@ export const taskController = {
       res.json({
         success: true,
         message: `${count} completed old tasks deleted`,
-        count
+        count,
       });
     } catch (error) {
       console.error('Error deleting completed old tasks:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to delete completed old tasks'
+        message: 'Failed to delete completed old tasks',
       });
     }
   },
@@ -270,7 +275,7 @@ export const taskController = {
       if (!task) {
         res.status(404).json({
           success: false,
-          message: 'Task not found'
+          message: 'Task not found',
         });
         return;
       }
@@ -279,13 +284,13 @@ export const taskController = {
       res.json({
         success: true,
         data: updatedTask,
-        message: `Task marked as ${updatedTask?.completed ? 'complete' : 'incomplete'}`
+        message: `Task marked as ${updatedTask?.completed ? 'complete' : 'incomplete'}`,
       });
     } catch (error) {
       console.error('Error toggling task completion:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to toggle task completion'
+        message: 'Failed to toggle task completion',
       });
     }
   },
@@ -297,13 +302,13 @@ export const taskController = {
       res.json({
         success: true,
         data: tasks,
-        count: tasks.length
+        count: tasks.length,
       });
     } catch (error) {
       console.error('Error getting deleted tasks:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve deleted tasks'
+        message: 'Failed to retrieve deleted tasks',
       });
     }
   },
@@ -317,7 +322,7 @@ export const taskController = {
       if (!task) {
         res.status(404).json({
           success: false,
-          message: 'Task not found or not deleted'
+          message: 'Task not found or not deleted',
         });
         return;
       }
@@ -325,13 +330,13 @@ export const taskController = {
       res.json({
         success: true,
         data: task,
-        message: 'Task restored successfully'
+        message: 'Task restored successfully',
       });
     } catch (error) {
       console.error('Error restoring task:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to restore task'
+        message: 'Failed to restore task',
       });
     }
   },
@@ -345,20 +350,20 @@ export const taskController = {
       if (!deleted) {
         res.status(404).json({
           success: false,
-          message: 'Task not found'
+          message: 'Task not found',
         });
         return;
       }
 
       res.json({
         success: true,
-        message: 'Task permanently deleted'
+        message: 'Task permanently deleted',
       });
     } catch (error) {
       console.error('Error permanently deleting task:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to permanently delete task'
+        message: 'Failed to permanently delete task',
       });
     }
   },
@@ -374,7 +379,7 @@ export const taskController = {
       if (!task) {
         res.status(404).json({
           success: false,
-          message: 'Task not found'
+          message: 'Task not found',
         });
         return;
       }
@@ -383,13 +388,13 @@ export const taskController = {
       res.json({
         success: true,
         data: history,
-        count: history.length
+        count: history.length,
       });
     } catch (error) {
       console.error('Error getting task history:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve task history'
+        message: 'Failed to retrieve task history',
       });
     }
   },
@@ -398,18 +403,18 @@ export const taskController = {
   async getAllTaskHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
-      
+
       const history = await TaskModel.getAllTaskHistory(req.user!.id, limit);
       res.json({
         success: true,
         data: history,
-        count: history.length
+        count: history.length,
       });
     } catch (error) {
       console.error('Error getting all task history:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve task history'
+        message: 'Failed to retrieve task history',
       });
     }
   },
@@ -421,13 +426,13 @@ export const taskController = {
       res.json({
         success: true,
         message: `Cleaned up ${deletedCount} expired deleted tasks`,
-        deletedCount
+        deletedCount,
       });
     } catch (error) {
       console.error('Error cleaning up expired tasks:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to cleanup expired tasks'
+        message: 'Failed to cleanup expired tasks',
       });
     }
   },
@@ -439,14 +444,14 @@ export const taskController = {
       res.json({
         success: true,
         data: tasks,
-        count: tasks.length
+        count: tasks.length,
       });
     } catch (error) {
       console.error('Error getting tasks about to expire:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve tasks about to expire'
+        message: 'Failed to retrieve tasks about to expire',
       });
     }
-  }
+  },
 };

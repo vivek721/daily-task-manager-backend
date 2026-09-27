@@ -53,15 +53,10 @@ module.exports = {
     'no-var': 'error',
     'object-shorthand': 'error',
     'prefer-template': 'error',
-    'template-curly-spacing': 'error',
-    'arrow-spacing': 'error',
-    'comma-dangle': ['error', 'always-multiline'],
-    'quotes': ['error', 'single', { avoidEscape: true }],
-    'semi': ['error', 'always'],
-    'indent': ['error', 2],
-    'max-len': ['warn', { code: 100, ignoreUrls: true, ignoreStrings: true }],
-    'no-multiple-empty-lines': ['error', { max: 1, maxEOF: 0 }],
-    'eol-last': 'error',
+    // Formatting (quotes, semicolons, indentation, trailing commas, line length, blank
+    // lines, EOF newline) is owned by Prettier (.prettierrc, `npm run format:check`).
+    // Re-enabling those rules here would override eslint-config-prettier and conflict
+    // with Prettier's output (e.g. comma-dangle vs. trailingComma: "es5").
   },
   overrides: [
     {

@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { taskController } from '../../controllers/taskController';
 import { TaskModel } from '../../models/Task';
 import { AuthenticatedRequest } from '../../middleware/auth';

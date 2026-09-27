@@ -1,3 +1,5 @@
+/* eslint-disable no-process-exit -- process entry point: exiting on startup failure,
+   uncaught exceptions and SIGTERM/SIGINT is intended here. */
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -10,7 +12,6 @@ import taskRoutes from './routes/taskRoutes';
 import subagentRoutes from './routes/subagentRoutes';
 import authRoutes from './routes/authRoutes';
 import { errorHandler, notFound } from './middleware/errorHandler';
-import { validateCreateTask, validateUpdateTask, validateTaskId } from './middleware/validation';
 import passport from './config/passport';
 
 dotenv.config();
@@ -67,7 +68,7 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Start server
-const startServer = async () => {
+const startServer = async (): Promise<void> => {
   try {
     // Initialize database
     await initDatabase();
@@ -106,4 +107,4 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
-startServer();
+void startServer();

@@ -32,7 +32,7 @@ describe('Health Check Endpoint', () => {
     expect(response.body).toEqual({
       success: true,
       message: 'Daily Task Manager API is running',
-      timestamp: expect.any(String),
+      timestamp: expect.any(String) as unknown,
       environment: 'test',
     });
   });
@@ -40,7 +40,7 @@ describe('Health Check Endpoint', () => {
   it('should return valid timestamp format', async () => {
     const response = await request(app).get('/health').expect(200);
 
-    const timestamp = response.body.timestamp;
+    const { timestamp } = response.body as { timestamp: string };
     expect(timestamp).toBeDefined();
     expect(new Date(timestamp).toISOString()).toBe(timestamp);
   });
@@ -48,6 +48,6 @@ describe('Health Check Endpoint', () => {
   it('should return test environment in test mode', async () => {
     const response = await request(app).get('/health').expect(200);
 
-    expect(response.body.environment).toBe('test');
+    expect((response.body as { environment: string }).environment).toBe('test');
   });
 });

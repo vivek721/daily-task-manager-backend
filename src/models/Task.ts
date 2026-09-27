@@ -15,6 +15,11 @@ const UPDATABLE_COLUMNS: ReadonlyArray<keyof UpdateTaskInput> = [
   'tags',
 ];
 
+// Rows of get_task_history() and the expiring_deleted_tasks view. Their columns are
+// defined in the database (not in this repo), so they are passed through untyped.
+export type TaskHistoryEntry = Record<string, unknown>;
+export type ExpiringTaskEntry = Record<string, unknown>;
+
 // Overdue = due before today, or (no due date and) created before today.
 const OVERDUE_CONDITION = `
   (
@@ -55,7 +60,7 @@ export class TaskModel {
 
   static async findAll(filters: TaskFilters = {}, userId: string): Promise<Task[]> {
     let query = 'SELECT * FROM tasks WHERE deleted_at IS NULL AND user_id = $1';
-    const values: any[] = [userId];
+    const values: unknown[] = [userId];
     let paramCount = 1;
 
     if (filters.completed !== undefined) {
@@ -135,7 +140,7 @@ export class TaskModel {
     updateData: UpdateTaskInput
   ): Promise<Task | null> {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramCount = 0;
 
     UPDATABLE_COLUMNS.forEach(key => {
@@ -346,7 +351,11 @@ export class TaskModel {
   // History for one task. Callers must check ownership first (see the controller), but
   // the task is joined on user_id here as well so the query can never leak another
   // user's history on its own.
-  static async getTaskHistory(taskId: string, userId: string, limit: number = 100): Promise<any[]> {
+  static async getTaskHistory(
+    taskId: string,
+    userId: string,
+    limit: number = 100
+  ): Promise<TaskHistoryEntry[]> {
     const query = `
       SELECT h.*
       FROM tasks t
@@ -355,7 +364,7 @@ export class TaskModel {
     `;
 
     try {
-      const result = await pool.query(query, [taskId, userId, limit]);
+      const result = await pool.query<TaskHistoryEntry>(query, [taskId, userId, limit]);
       return result.rows;
     } catch (error) {
       console.error('Error getting task history:', error);
@@ -368,7 +377,7 @@ export class TaskModel {
   // called once per task the user owns. Rows are grouped by task (most recently updated
   // task first) rather than globally ordered by change time, because the function's output
   // columns are defined in the database, not in this repo.
-  static async getAllTaskHistory(userId: string, limit: number = 100): Promise<any[]> {
+  static async getAllTaskHistory(userId: string, limit: number = 100): Promise<TaskHistoryEntry[]> {
     const query = `
       SELECT h.*
       FROM (
@@ -379,7 +388,7 @@ export class TaskModel {
     `;
 
     try {
-      const result = await pool.query(query, [userId, limit]);
+      const result = await pool.query<TaskHistoryEntry>(query, [userId, limit]);
       return result.rows;
     } catch (error) {
       console.error('Error getting task history:', error);
@@ -408,7 +417,7 @@ export class TaskModel {
   }
 
   // Get the user's deleted tasks that are about to expire (for notifications)
-  static async getTasksAboutToExpire(userId: string): Promise<any[]> {
+  static async getTasksAboutToExpire(userId: string): Promise<ExpiringTaskEntry[]> {
     const query = `
       SELECT e.* FROM expiring_deleted_tasks e
       WHERE e.hours_until_expiry <= 2
@@ -416,7 +425,7 @@ export class TaskModel {
     `;
 
     try {
-      const result = await pool.query(query, [userId]);
+      const result = await pool.query<ExpiringTaskEntry>(query, [userId]);
       return result.rows;
     } catch (error) {
       console.error('Error getting tasks about to expire:', error);

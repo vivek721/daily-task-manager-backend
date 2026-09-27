@@ -5,6 +5,7 @@ import subagentRoutes from '../../routes/subagentRoutes';
 import { TaskModel } from '../../models/Task';
 import { SubagentModel } from '../../models/Subagent';
 import { AuthenticatedRequest } from '../../middleware/auth';
+import { SubagentAssignment } from '../../types/Subagent';
 
 jest.mock('../../models/Task');
 jest.mock('../../models/Subagent');
@@ -76,7 +77,9 @@ describe('Subagent Controller - task ownership', () => {
   describe('assignTaskToSubagent', () => {
     it('assigns a task the user owns', async () => {
       MockedTaskModel.findById = jest.fn().mockResolvedValue({ id: TASK_ID });
-      subagentProto.assignTaskToSubagent.mockResolvedValue({ id: ASSIGNMENT_ID } as any);
+      subagentProto.assignTaskToSubagent.mockResolvedValue({
+        id: ASSIGNMENT_ID,
+      } as SubagentAssignment);
 
       await call(subagentController.assignTaskToSubagent);
 

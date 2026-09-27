@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { RequestHandler } from 'express';
 import passport from '../config/passport';
 import {
   googleCallback,
@@ -9,19 +9,23 @@ import {
   signup,
   signin,
 } from '../controllers/authController';
-import { authenticateToken, AuthenticatedRequest } from '../middleware/auth';
+import { authenticateToken } from '../middleware/auth';
 
 const router = express.Router();
 
 // Google OAuth routes
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+// @types/passport types authenticate() as returning any
+router.get(
+  '/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] }) as RequestHandler
+);
 
 router.get(
   '/google/callback',
   passport.authenticate('google', {
     failureRedirect: `${process.env.FRONTEND_URL}/login?error=oauth_failed`,
-  }),
-  googleCallback as any
+  }) as RequestHandler,
+  googleCallback
 );
 
 // Local authentication routes
@@ -32,7 +36,7 @@ router.post('/signin', signin);
 router.post('/dev-login', devLogin);
 
 // Protected routes
-router.get('/profile', authenticateToken as any, getProfile as any);
+router.get('/profile', authenticateToken, getProfile);
 router.post('/logout', logout);
 router.post('/verify', verifyToken);
 

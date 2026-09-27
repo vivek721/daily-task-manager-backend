@@ -8,7 +8,8 @@ export const errorHandler = (
   err: ApiError,
   req: Request,
   res: Response,
-  next: NextFunction
+  // Express only treats 4-argument middleware as an error handler, so keep the parameter
+  _next: NextFunction
 ): void => {
   const status = err.status || 500;
   const message = err.message || 'Internal Server Error';

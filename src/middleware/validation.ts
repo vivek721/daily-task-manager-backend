@@ -1,7 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
 
+// Request bodies are untrusted JSON, so fields are read as unknown and narrowed here
+interface TaskBody {
+  title?: unknown;
+  priority?: unknown;
+  due_date?: unknown;
+  completed?: unknown;
+}
+
+const PRIORITIES: readonly unknown[] = ['low', 'medium', 'high'];
+
+const isInvalidDate = (value: unknown): boolean =>
+  typeof value !== 'string' || isNaN(Date.parse(value));
+
 export const validateCreateTask = (req: Request, res: Response, next: NextFunction): void => {
-  const { title, priority, due_date } = req.body;
+  const { title, priority, due_date } = req.body as TaskBody;
 
   // Validate title
   if (!title || typeof title !== 'string' || title.trim() === '') {
@@ -13,7 +26,7 @@ export const validateCreateTask = (req: Request, res: Response, next: NextFuncti
   }
 
   // Validate priority if provided
-  if (priority && !['low', 'medium', 'high'].includes(priority)) {
+  if (priority && !PRIORITIES.includes(priority)) {
     res.status(400).json({
       success: false,
       message: 'Priority must be one of: low, medium, high',
@@ -22,7 +35,7 @@ export const validateCreateTask = (req: Request, res: Response, next: NextFuncti
   }
 
   // Validate due_date if provided
-  if (due_date && isNaN(Date.parse(due_date))) {
+  if (due_date && isInvalidDate(due_date)) {
     res.status(400).json({
       success: false,
       message: 'Invalid due_date format',
@@ -34,7 +47,7 @@ export const validateCreateTask = (req: Request, res: Response, next: NextFuncti
 };
 
 export const validateUpdateTask = (req: Request, res: Response, next: NextFunction): void => {
-  const { title, priority, due_date, completed } = req.body;
+  const { title, priority, due_date, completed } = req.body as TaskBody;
 
   // Validate title if provided
   if (title !== undefined && (typeof title !== 'string' || title.trim() === '')) {
@@ -46,7 +59,7 @@ export const validateUpdateTask = (req: Request, res: Response, next: NextFuncti
   }
 
   // Validate priority if provided
-  if (priority && !['low', 'medium', 'high'].includes(priority)) {
+  if (priority && !PRIORITIES.includes(priority)) {
     res.status(400).json({
       success: false,
       message: 'Priority must be one of: low, medium, high',
@@ -55,7 +68,7 @@ export const validateUpdateTask = (req: Request, res: Response, next: NextFuncti
   }
 
   // Validate due_date if provided
-  if (due_date && isNaN(Date.parse(due_date))) {
+  if (due_date && isInvalidDate(due_date)) {
     res.status(400).json({
       success: false,
       message: 'Invalid due_date format',

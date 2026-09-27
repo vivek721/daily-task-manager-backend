@@ -8,6 +8,8 @@ jest.mock('../../models/Task');
 jest.mock('../../config/database');
 
 const MockedTaskModel = TaskModel as jest.Mocked<typeof TaskModel>;
+// Lets the table-driven tests below swap model methods by name
+const modelMethods = TaskModel as unknown as Record<string, jest.Mock>;
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const TASK_ID = '22222222-2222-4222-8222-222222222222';
@@ -141,18 +143,18 @@ describe('Task Controller - ownership scoping', () => {
     ['restoreTask', 'restore', null],
   ] as const)('%s', (handlerName, modelMethod, notFoundValue) => {
     it('passes the task id and the authenticated user id to the model', async () => {
-      (MockedTaskModel as any)[modelMethod] = jest
+      modelMethods[modelMethod] = jest
         .fn()
         .mockResolvedValue(modelMethod === 'restore' ? ownTask : true);
 
       await call(taskController[handlerName]);
 
-      expect((MockedTaskModel as any)[modelMethod]).toHaveBeenCalledWith(TASK_ID, USER_ID);
+      expect(modelMethods[modelMethod]).toHaveBeenCalledWith(TASK_ID, USER_ID);
       expect(responseStatus).not.toHaveBeenCalled();
     });
 
     it('returns 404 for a task owned by another user', async () => {
-      (MockedTaskModel as any)[modelMethod] = jest.fn().mockResolvedValue(notFoundValue);
+      modelMethods[modelMethod] = jest.fn().mockResolvedValue(notFoundValue);
 
       await call(taskController[handlerName]);
 
@@ -170,11 +172,11 @@ describe('Task Controller - ownership scoping', () => {
     ['cleanupExpiredTasks', 'cleanupExpiredTasks', 0],
   ] as const)('%s', (handlerName, modelMethod, resolved) => {
     it('is scoped to the authenticated user', async () => {
-      (MockedTaskModel as any)[modelMethod] = jest.fn().mockResolvedValue(resolved);
+      modelMethods[modelMethod] = jest.fn().mockResolvedValue(resolved);
 
       await call(taskController[handlerName]);
 
-      expect((MockedTaskModel as any)[modelMethod]).toHaveBeenCalledWith(USER_ID);
+      expect(modelMethods[modelMethod]).toHaveBeenCalledWith(USER_ID);
       expect(responseStatus).not.toHaveBeenCalled();
     });
   });

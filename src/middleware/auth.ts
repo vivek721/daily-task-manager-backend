@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { UserModel } from '../models/User';
+import '../types/express';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
@@ -70,8 +71,11 @@ export const optionalAuth = async (
     const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
 
     if (token) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
-      const user = await UserModel.findById(decoded.userId);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId?: unknown };
+      const user =
+        typeof decoded.userId === 'string' && UUID_REGEX.test(decoded.userId)
+          ? await UserModel.findById(decoded.userId)
+          : null;
 
       if (user) {
         req.user = {

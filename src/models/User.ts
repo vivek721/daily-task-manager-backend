@@ -109,7 +109,7 @@ export class UserModel {
 
   static async update(id: string, updateData: Partial<CreateUserInput>): Promise<User | null> {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramCount = 0;
 
     Object.entries(updateData).forEach(([key, value]) => {
@@ -215,7 +215,7 @@ export class UserModel {
     excludeAuthType?: 'google' | 'local'
   ): Promise<boolean> {
     let query = 'SELECT id FROM users WHERE email = $1';
-    const values: any[] = [email];
+    const values: unknown[] = [email];
 
     if (excludeAuthType) {
       query += ' AND auth_type != $2';

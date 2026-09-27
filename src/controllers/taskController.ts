@@ -9,7 +9,7 @@ const subagentModel = new SubagentModel(pool);
 
 export const taskController = {
   // Get all tasks with optional filters
-  async getAllTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getAllTasks: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const filters: TaskFilters = {
         completed:
@@ -40,7 +40,7 @@ export const taskController = {
   },
 
   // Get today's tasks
-  async getTodaysTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getTodaysTasks: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tasks = await TaskModel.getTodaysTasks(req.user!.id);
       res.json({
@@ -58,7 +58,7 @@ export const taskController = {
   },
 
   // Get old tasks
-  async getOldTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getOldTasks: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tasks = await TaskModel.getOldTasks(req.user!.id);
       res.json({
@@ -76,7 +76,7 @@ export const taskController = {
   },
 
   // Get task by ID
-  async getTaskById(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getTaskById: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const task = await TaskModel.findById(id, req.user!.id);
@@ -103,10 +103,10 @@ export const taskController = {
   },
 
   // Create new task
-  async createTask(req: AuthenticatedRequest, res: Response): Promise<void> {
+  createTask: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       console.log('createTask called with user:', req.user);
-      const taskData: CreateTaskInput = req.body;
+      const taskData = req.body as CreateTaskInput;
 
       if (!taskData.title || taskData.title.trim() === '') {
         res.status(400).json({
@@ -151,10 +151,10 @@ export const taskController = {
   },
 
   // Update task
-  async updateTask(req: AuthenticatedRequest, res: Response): Promise<void> {
+  updateTask: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const updateData: UpdateTaskInput = req.body;
+      const updateData = req.body as UpdateTaskInput;
 
       const task = await TaskModel.update(id, req.user!.id, updateData);
 
@@ -188,7 +188,7 @@ export const taskController = {
   },
 
   // Delete task
-  async deleteTask(req: AuthenticatedRequest, res: Response): Promise<void> {
+  deleteTask: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const deleted = await TaskModel.delete(id, req.user!.id);
@@ -215,7 +215,7 @@ export const taskController = {
   },
 
   // Bulk operations for old tasks
-  async markAllOldTasksComplete(req: AuthenticatedRequest, res: Response): Promise<void> {
+  markAllOldTasksComplete: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const count = await TaskModel.markAllOldTasksComplete(req.user!.id);
       res.json({
@@ -232,7 +232,7 @@ export const taskController = {
     }
   },
 
-  async deleteAllOldTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
+  deleteAllOldTasks: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const count = await TaskModel.deleteAllOldTasks(req.user!.id);
       res.json({
@@ -249,7 +249,7 @@ export const taskController = {
     }
   },
 
-  async deleteCompletedOldTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
+  deleteCompletedOldTasks: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const count = await TaskModel.deleteCompletedOldTasks(req.user!.id);
       res.json({
@@ -267,7 +267,7 @@ export const taskController = {
   },
 
   // Toggle task completion
-  async toggleTaskComplete(req: AuthenticatedRequest, res: Response): Promise<void> {
+  toggleTaskComplete: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const task = await TaskModel.findById(id, req.user!.id);
@@ -296,7 +296,7 @@ export const taskController = {
   },
 
   // Get deleted tasks (within TTL period)
-  async getDeletedTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getDeletedTasks: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tasks = await TaskModel.getDeletedTasks(req.user!.id);
       res.json({
@@ -314,7 +314,7 @@ export const taskController = {
   },
 
   // Restore a soft-deleted task
-  async restoreTask(req: AuthenticatedRequest, res: Response): Promise<void> {
+  restoreTask: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const task = await TaskModel.restore(id, req.user!.id);
@@ -342,7 +342,7 @@ export const taskController = {
   },
 
   // Hard delete a task (bypass TTL)
-  async hardDeleteTask(req: AuthenticatedRequest, res: Response): Promise<void> {
+  hardDeleteTask: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const deleted = await TaskModel.hardDelete(id, req.user!.id);
@@ -369,7 +369,7 @@ export const taskController = {
   },
 
   // Get task history
-  async getTaskHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getTaskHistory: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
@@ -400,7 +400,7 @@ export const taskController = {
   },
 
   // Get all task history (not specific to one task)
-  async getAllTaskHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getAllTaskHistory: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
 
@@ -420,7 +420,7 @@ export const taskController = {
   },
 
   // Manual cleanup of expired deleted tasks
-  async cleanupExpiredTasks(req: AuthenticatedRequest, res: Response): Promise<void> {
+  cleanupExpiredTasks: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const deletedCount = await TaskModel.cleanupExpiredTasks(req.user!.id);
       res.json({
@@ -438,7 +438,7 @@ export const taskController = {
   },
 
   // Get tasks about to expire (for notifications)
-  async getTasksAboutToExpire(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getTasksAboutToExpire: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const tasks = await TaskModel.getTasksAboutToExpire(req.user!.id);
       res.json({

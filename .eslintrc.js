@@ -67,6 +67,9 @@ module.exports = {
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',
         'security/detect-object-injection': 'off',
+        // Jest assertions reference mocked methods without calling them
+        // (expect(Model.method).toHaveBeenCalled()), which this rule reports as unbound.
+        '@typescript-eslint/unbound-method': 'off',
       },
     },
   ],

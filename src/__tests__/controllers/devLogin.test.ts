@@ -67,10 +67,10 @@ describe('devLogin', () => {
       auth_type: 'local',
     });
     expect(responseStatus).not.toHaveBeenCalled();
-    const body = responseJson.mock.calls[0][0];
+    const body = (responseJson.mock.calls as unknown[][])[0][0] as { token: string; user: unknown };
     expect(body.user).toEqual({ id: DEV_USER_ID, email: DEV_USER.email, name: DEV_USER.name });
 
-    const decoded = jwt.verify(body.token, process.env.JWT_SECRET!) as any;
+    const decoded = jwt.verify(body.token, process.env.JWT_SECRET!) as { userId: string };
     expect(decoded.userId).toBe(DEV_USER_ID);
 
     // The issued token passes the auth middleware

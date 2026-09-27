@@ -61,14 +61,5 @@ export const testUtils = {
   }),
 };
 
-// Declare global for TypeScript
-declare global {
-  namespace NodeJS {
-    interface Global {
-      testUtils: typeof testUtils;
-    }
-  }
-}
-
-// Make testUtils available globally
-(global as any).testUtils = testUtils;
+// Make testUtils available globally (tests can also import it from this module)
+(global as Record<string, unknown>).testUtils = testUtils;

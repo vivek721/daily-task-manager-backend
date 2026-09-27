@@ -7,14 +7,18 @@ import {
   CreateSubagentInput,
   UpdateSubagentInput,
   CreateAssignmentRuleInput,
-  UpdateAssignmentRuleInput,
+  SubagentAssignment,
 } from '../types/Subagent';
 
 const subagentModel = new SubagentModel(pool);
 
+// PostgreSQL unique_violation
+const isUniqueViolation = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && (error as { code?: unknown }).code === '23505';
+
 export const subagentController = {
   // Subagent CRUD operations
-  async getAllSubagents(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getAllSubagents: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const subagents = await subagentModel.findAllSubagents();
       res.json({
@@ -31,7 +35,7 @@ export const subagentController = {
     }
   },
 
-  async getSubagentById(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getSubagentById: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const subagent = await subagentModel.findSubagentById(id);
@@ -57,9 +61,9 @@ export const subagentController = {
     }
   },
 
-  async createSubagent(req: AuthenticatedRequest, res: Response): Promise<void> {
+  createSubagent: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const subagentData: CreateSubagentInput = req.body;
+      const subagentData = req.body as CreateSubagentInput;
 
       if (!subagentData.name || !subagentData.type) {
         res.status(400).json({
@@ -75,9 +79,9 @@ export const subagentController = {
         data: subagent,
         message: 'Subagent created successfully',
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating subagent:', error);
-      if (error.code === '23505') {
+      if (isUniqueViolation(error)) {
         // Unique constraint violation
         res.status(409).json({
           success: false,
@@ -92,10 +96,10 @@ export const subagentController = {
     }
   },
 
-  async updateSubagent(req: AuthenticatedRequest, res: Response): Promise<void> {
+  updateSubagent: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const updateData: UpdateSubagentInput = req.body;
+      const updateData = req.body as UpdateSubagentInput;
 
       const subagent = await subagentModel.updateSubagent(id, updateData);
 
@@ -121,7 +125,7 @@ export const subagentController = {
     }
   },
 
-  async deleteSubagent(req: AuthenticatedRequest, res: Response): Promise<void> {
+  deleteSubagent: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
       const deleted = await subagentModel.deleteSubagent(id);
@@ -148,10 +152,13 @@ export const subagentController = {
   },
 
   // Assignment operations
-  async assignTaskToSubagent(req: AuthenticatedRequest, res: Response): Promise<void> {
+  assignTaskToSubagent: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { taskId, subagentId } = req.params;
-      const { reason, metadata } = req.body;
+      const { reason, metadata } = req.body as {
+        reason?: string;
+        metadata?: Record<string, unknown>;
+      };
 
       if (!reason) {
         res.status(400).json({
@@ -183,9 +190,9 @@ export const subagentController = {
         data: assignment,
         message: 'Task assigned successfully',
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error assigning task:', error);
-      if (error.code === '23505') {
+      if (isUniqueViolation(error)) {
         // Unique constraint violation
         res.status(409).json({
           success: false,
@@ -200,7 +207,7 @@ export const subagentController = {
     }
   },
 
-  async getTaskAssignments(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getTaskAssignments: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { taskId } = req.params;
 
@@ -230,7 +237,7 @@ export const subagentController = {
     }
   },
 
-  async getSubagentAssignments(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getSubagentAssignments: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { subagentId } = req.params;
       const assignments = await subagentModel.getSubagentAssignments(subagentId, req.user!.id);
@@ -249,10 +256,10 @@ export const subagentController = {
     }
   },
 
-  async updateAssignmentStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
+  updateAssignmentStatus: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { assignmentId } = req.params;
-      const { status } = req.body;
+      const { status } = req.body as { status?: SubagentAssignment['status'] };
 
       if (!status) {
         res.status(400).json({
@@ -291,7 +298,7 @@ export const subagentController = {
   },
 
   // Auto-assignment
-  async autoAssignTask(req: AuthenticatedRequest, res: Response): Promise<void> {
+  autoAssignTask: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const { taskId } = req.params;
 
@@ -342,7 +349,7 @@ export const subagentController = {
   },
 
   // Assignment Rules
-  async getAllAssignmentRules(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getAllAssignmentRules: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const rules = await subagentModel.findAllAssignmentRules();
       res.json({
@@ -359,9 +366,9 @@ export const subagentController = {
     }
   },
 
-  async createAssignmentRule(req: AuthenticatedRequest, res: Response): Promise<void> {
+  createAssignmentRule: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const ruleData: CreateAssignmentRuleInput = req.body;
+      const ruleData = req.body as CreateAssignmentRuleInput;
 
       if (!ruleData.name || !ruleData.trigger_conditions || !ruleData.assignment_criteria) {
         res.status(400).json({
@@ -387,7 +394,7 @@ export const subagentController = {
   },
 
   // Statistics and monitoring
-  async getSubagentStats(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getSubagentStats: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const stats = await subagentModel.getSubagentStats();
       res.json({
@@ -403,7 +410,7 @@ export const subagentController = {
     }
   },
 
-  async getAssignmentHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
+  getAssignmentHistory: async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
       const history = await subagentModel.getAssignmentHistory(req.user!.id, limit);

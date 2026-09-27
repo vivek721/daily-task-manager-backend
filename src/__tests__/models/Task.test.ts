@@ -1,5 +1,6 @@
 import pool from '../../config/database';
 import { TaskModel } from '../../models/Task';
+import { UpdateTaskInput } from '../../types/Task';
 
 // Replace the pg pool with a mock so the generated SQL can be inspected
 jest.mock('../../config/database', () => ({
@@ -13,7 +14,10 @@ const USER_ID = '11111111-1111-4111-8111-111111111111';
 const TASK_ID = '22222222-2222-4222-8222-222222222222';
 
 const lastCall = (): { sql: string; values: unknown[] } => {
-  const [sql, values] = mockQuery.mock.calls[mockQuery.mock.calls.length - 1];
+  const [sql, values] = mockQuery.mock.calls[mockQuery.mock.calls.length - 1] as [
+    string,
+    unknown[] | undefined,
+  ];
   return { sql: String(sql).replace(/\s+/g, ' '), values: values || [] };
 };
 
@@ -57,7 +61,7 @@ describe('TaskModel - ownership scoping', () => {
 
   it('update is scoped to the user and ignores non-updatable columns', async () => {
     const payload = { title: 'Renamed', user_id: 'attacker', id: 'x', 'deleted_at = NULL --': 1 };
-    await TaskModel.update(TASK_ID, USER_ID, payload as any);
+    await TaskModel.update(TASK_ID, USER_ID, payload as unknown as UpdateTaskInput);
 
     expectScopedToUser();
     const { sql, values } = lastCall();
@@ -67,9 +71,9 @@ describe('TaskModel - ownership scoping', () => {
   });
 
   it('update throws when no updatable fields are provided', async () => {
-    await expect(TaskModel.update(TASK_ID, USER_ID, { user_id: 'x' } as any)).rejects.toThrow(
-      'No fields to update'
-    );
+    await expect(
+      TaskModel.update(TASK_ID, USER_ID, { user_id: 'x' } as unknown as UpdateTaskInput)
+    ).rejects.toThrow('No fields to update');
     expect(mockQuery).not.toHaveBeenCalled();
   });
 

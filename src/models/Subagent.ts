@@ -6,10 +6,48 @@ import {
   CreateSubagentInput,
   UpdateSubagentInput,
   CreateAssignmentRuleInput,
-  UpdateAssignmentRuleInput,
   TriggerCondition,
   AssignmentCriteria,
 } from '../types/Subagent';
+import { Task } from '../types/Task';
+
+// trigger_conditions / assignment_criteria are JSONB. node-postgres already returns JSONB
+// columns as parsed values, so only parse when a driver/test hands back a string
+// (JSON.parse on the parsed array threw "Unexpected token o in JSON").
+type AssignmentRuleRow = Omit<AssignmentRule, 'trigger_conditions' | 'assignment_criteria'> & {
+  trigger_conditions: TriggerCondition[] | string;
+  assignment_criteria: AssignmentCriteria | string;
+};
+
+const parseJsonColumn = <T>(value: T | string): T =>
+  typeof value === 'string' ? (JSON.parse(value) as T) : value;
+
+const toAssignmentRule = (row: AssignmentRuleRow): AssignmentRule => ({
+  ...row,
+  trigger_conditions: parseJsonColumn(row.trigger_conditions),
+  assignment_criteria: parseJsonColumn(row.assignment_criteria),
+});
+
+export interface SubagentStats {
+  id: string;
+  name: string;
+  type: Subagent['type'];
+  status: Subagent['status'];
+  current_load: number;
+  load_capacity: number;
+  load_percentage: string; // NUMERIC, returned as a string by node-postgres
+  total_assignments: string; // COUNT(*) is BIGINT, returned as a string
+  completed_assignments: string;
+  failed_assignments: string;
+}
+
+export interface AssignmentHistoryEntry extends SubagentAssignment {
+  subagent_name: string;
+  subagent_type: Subagent['type'];
+  task_title: string;
+  task_priority: Task['priority'];
+  task_category: string | null;
+}
 
 export class SubagentModel {
   constructor(private pool: Pool) {}
@@ -20,13 +58,13 @@ export class SubagentModel {
       SELECT * FROM subagents 
       ORDER BY created_at DESC
     `;
-    const result = await this.pool.query(query);
+    const result = await this.pool.query<Subagent>(query);
     return result.rows;
   }
 
   async findSubagentById(id: string): Promise<Subagent | null> {
     const query = 'SELECT * FROM subagents WHERE id = $1';
-    const result = await this.pool.query(query, [id]);
+    const result = await this.pool.query<Subagent>(query, [id]);
     return result.rows[0] || null;
   }
 
@@ -46,13 +84,13 @@ export class SubagentModel {
       data.priority_preference,
     ];
 
-    const result = await this.pool.query(query, values);
+    const result = await this.pool.query<Subagent>(query, values);
     return result.rows[0];
   }
 
   async updateSubagent(id: string, data: UpdateSubagentInput): Promise<Subagent | null> {
     const fields: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramCount = 1;
 
     // Only known columns are written; other body keys are ignored so they can't be
@@ -86,7 +124,7 @@ export class SubagentModel {
     `;
     values.push(id);
 
-    const result = await this.pool.query(query, values);
+    const result = await this.pool.query<Subagent>(query, values);
     return result.rows[0] || null;
   }
 
@@ -101,7 +139,7 @@ export class SubagentModel {
     taskId: string,
     subagentId: string,
     reason: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, unknown>
   ): Promise<SubagentAssignment> {
     const query = `
       INSERT INTO subagent_assignments (task_id, subagent_id, assignment_reason, metadata)
@@ -110,7 +148,7 @@ export class SubagentModel {
     `;
     const values = [taskId, subagentId, reason, JSON.stringify(metadata || {})];
 
-    const result = await this.pool.query(query, values);
+    const result = await this.pool.query<SubagentAssignment>(query, values);
     return result.rows[0];
   }
 
@@ -122,7 +160,7 @@ export class SubagentModel {
       WHERE sa.task_id = $1
       ORDER BY sa.assigned_at DESC
     `;
-    const result = await this.pool.query(query, [taskId]);
+    const result = await this.pool.query<SubagentAssignment>(query, [taskId]);
     return result.rows;
   }
 
@@ -137,7 +175,7 @@ export class SubagentModel {
         AND sa.status IN ('assigned', 'in_progress')
       ORDER BY sa.assigned_at DESC
     `;
-    const result = await this.pool.query(query, [subagentId, userId]);
+    const result = await this.pool.query<SubagentAssignment>(query, [subagentId, userId]);
     return result.rows;
   }
 
@@ -156,7 +194,7 @@ export class SubagentModel {
         AND t.user_id = $3
       RETURNING sa.*
     `;
-    const result = await this.pool.query(query, [status, assignmentId, userId]);
+    const result = await this.pool.query<SubagentAssignment>(query, [status, assignmentId, userId]);
     return result.rows[0] || null;
   }
 
@@ -167,12 +205,8 @@ export class SubagentModel {
       WHERE active = true
       ORDER BY priority DESC, created_at DESC
     `;
-    const result = await this.pool.query(query);
-    return result.rows.map(row => ({
-      ...row,
-      trigger_conditions: JSON.parse(row.trigger_conditions),
-      assignment_criteria: JSON.parse(row.assignment_criteria),
-    }));
+    const result = await this.pool.query<AssignmentRuleRow>(query);
+    return result.rows.map(toAssignmentRule);
   }
 
   async createAssignmentRule(data: CreateAssignmentRuleInput): Promise<AssignmentRule> {
@@ -189,13 +223,8 @@ export class SubagentModel {
       data.priority,
     ];
 
-    const result = await this.pool.query(query, values);
-    const row = result.rows[0];
-    return {
-      ...row,
-      trigger_conditions: JSON.parse(row.trigger_conditions),
-      assignment_criteria: JSON.parse(row.assignment_criteria),
-    };
+    const result = await this.pool.query<AssignmentRuleRow>(query, values);
+    return toAssignmentRule(result.rows[0]);
   }
 
   // Auto-assignment logic
@@ -204,7 +233,7 @@ export class SubagentModel {
       SELECT * FROM subagents 
       WHERE status = 'active' AND current_load < load_capacity
     `;
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramCount = 1;
 
     if (criteria.subagent_type) {
@@ -237,12 +266,12 @@ export class SubagentModel {
       query += ` ORDER BY created_at ASC`;
     }
 
-    const result = await this.pool.query(query, values);
+    const result = await this.pool.query<Subagent>(query, values);
     return result.rows;
   }
 
   async evaluateTaskForRules(
-    task: any
+    task: Task
   ): Promise<{ rule: AssignmentRule; subagent: Subagent } | null> {
     const rules = await this.findAllAssignmentRules();
 
@@ -258,10 +287,12 @@ export class SubagentModel {
     return null;
   }
 
-  private doesTaskMatchRule(task: any, rule: AssignmentRule): boolean {
+  private doesTaskMatchRule(task: Task, rule: AssignmentRule): boolean {
+    const fields = task as unknown as Record<string, unknown>;
     return rule.trigger_conditions.every(condition => {
-      const fieldValue = task[condition.field];
-      if (!fieldValue) return false;
+      // Rules compare text fields (title, description, category, priority, ...)
+      const fieldValue = fields[condition.field];
+      if (typeof fieldValue !== 'string' || !fieldValue) return false;
 
       const value = condition.case_sensitive ? fieldValue : fieldValue.toLowerCase();
       const conditionValue = condition.case_sensitive
@@ -291,7 +322,7 @@ export class SubagentModel {
   }
 
   // Statistics and monitoring
-  async getSubagentStats(): Promise<any> {
+  async getSubagentStats(): Promise<SubagentStats[]> {
     const query = `
       SELECT 
         s.id,
@@ -309,12 +340,15 @@ export class SubagentModel {
       GROUP BY s.id, s.name, s.type, s.status, s.current_load, s.load_capacity
       ORDER BY s.name
     `;
-    const result = await this.pool.query(query);
+    const result = await this.pool.query<SubagentStats>(query);
     return result.rows;
   }
 
   // Assignment history limited to tasks owned by the given user
-  async getAssignmentHistory(userId: string, limit: number = 50): Promise<any[]> {
+  async getAssignmentHistory(
+    userId: string,
+    limit: number = 50
+  ): Promise<AssignmentHistoryEntry[]> {
     const query = `
       SELECT 
         sa.*,
@@ -330,7 +364,7 @@ export class SubagentModel {
       ORDER BY sa.assigned_at DESC
       LIMIT $2
     `;
-    const result = await this.pool.query(query, [userId, limit]);
+    const result = await this.pool.query<AssignmentHistoryEntry>(query, [userId, limit]);
     return result.rows;
   }
 }

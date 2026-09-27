@@ -5,30 +5,30 @@ import { authenticateToken } from '../middleware/auth';
 const router = Router();
 
 // Apply required authentication to all routes
-router.use(authenticateToken as any);
+router.use(authenticateToken);
 
 // Subagent CRUD operations
-router.get('/', subagentController.getAllSubagents as any);
-router.get('/stats', subagentController.getSubagentStats as any);
-router.get('/:id', subagentController.getSubagentById as any);
-router.post('/', subagentController.createSubagent as any);
-router.put('/:id', subagentController.updateSubagent as any);
-router.delete('/:id', subagentController.deleteSubagent as any);
+router.get('/', subagentController.getAllSubagents);
+router.get('/stats', subagentController.getSubagentStats);
+router.get('/:id', subagentController.getSubagentById);
+router.post('/', subagentController.createSubagent);
+router.put('/:id', subagentController.updateSubagent);
+router.delete('/:id', subagentController.deleteSubagent);
 
 // Subagent assignments
-router.get('/:subagentId/assignments', subagentController.getSubagentAssignments as any);
+router.get('/:subagentId/assignments', subagentController.getSubagentAssignments);
 
 // Assignment operations
-router.post('/assign/:taskId/:subagentId', subagentController.assignTaskToSubagent as any);
-router.get('/assignments/task/:taskId', subagentController.getTaskAssignments as any);
-router.get('/assignments/history', subagentController.getAssignmentHistory as any);
-router.patch('/assignments/:assignmentId/status', subagentController.updateAssignmentStatus as any);
+router.post('/assign/:taskId/:subagentId', subagentController.assignTaskToSubagent);
+router.get('/assignments/task/:taskId', subagentController.getTaskAssignments);
+router.get('/assignments/history', subagentController.getAssignmentHistory);
+router.patch('/assignments/:assignmentId/status', subagentController.updateAssignmentStatus);
 
 // Auto-assignment
-router.post('/auto-assign/:taskId', subagentController.autoAssignTask as any);
+router.post('/auto-assign/:taskId', subagentController.autoAssignTask);
 
 // Assignment rules
-router.get('/rules/all', subagentController.getAllAssignmentRules as any);
-router.post('/rules', subagentController.createAssignmentRule as any);
+router.get('/rules/all', subagentController.getAllAssignmentRules);
+router.post('/rules', subagentController.createAssignmentRule);
 
 export default router;

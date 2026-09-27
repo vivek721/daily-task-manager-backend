@@ -1,14 +1,18 @@
 import { Request, Response } from 'express';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import { User, CreateLocalUserInput, LoginCredentials } from '../types/User';
+import { CreateLocalUserInput, LoginCredentials } from '../types/User';
 import { UserModel } from '../models/User';
+import '../types/express';
 
-interface AuthenticatedRequest extends Request {
-  user?: User;
+// Claims signed into every JWT this API issues
+interface TokenPayload {
+  userId?: unknown;
+  email?: unknown;
+  name?: unknown;
 }
 
-export const googleCallback = (req: AuthenticatedRequest, res: Response): void => {
+export const googleCallback = (req: Request, res: Response): void => {
   try {
     if (!req.user) {
       res.redirect(`${process.env.FRONTEND_URL}/login?error=authentication_failed`);
@@ -36,7 +40,7 @@ export const googleCallback = (req: AuthenticatedRequest, res: Response): void =
   }
 };
 
-export const getProfile = (req: AuthenticatedRequest, res: Response): void => {
+export const getProfile = (req: Request, res: Response): void => {
   try {
     if (!req.user) {
       res.status(401).json({ error: 'Not authenticated' });
@@ -76,7 +80,7 @@ export const verifyToken = (req: Request, res: Response): void => {
   }
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as TokenPayload;
     res.json({
       success: true,
       user: {
@@ -93,7 +97,7 @@ export const verifyToken = (req: Request, res: Response): void => {
 // Local authentication signup
 export const signup = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { username, email, name, password }: CreateLocalUserInput = req.body;
+    const { username, email, name, password } = req.body as Partial<CreateLocalUserInput>;
 
     // Validation
     if (!username || !email || !name || !password) {
@@ -180,7 +184,7 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
 // Local authentication signin
 export const signin = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { username, password }: LoginCredentials = req.body;
+    const { username, password } = req.body as Partial<LoginCredentials>;
 
     // Validation
     if (!username || !password) {

@@ -1,363 +1,257 @@
-# Daily Task Manager Backend
+# Daily Task Manager - Backend
 
-[![CI Status](https://github.com/your-username/daily-task-manager-backend/workflows/Continuous%20Integration/badge.svg)](https://github.com/your-username/daily-task-manager-backend/actions/workflows/ci.yml)
-[![Deploy Status](https://github.com/your-username/daily-task-manager-backend/workflows/Deploy%20to%20Production/badge.svg)](https://github.com/your-username/daily-task-manager-backend/actions/workflows/deploy.yml)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=daily-task-manager-backend&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=daily-task-manager-backend)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=daily-task-manager-backend&metric=coverage)](https://sonarcloud.io/summary/new_code?id=daily-task-manager-backend)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=daily-task-manager-backend&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=daily-task-manager-backend)
-[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=daily-task-manager-backend&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=daily-task-manager-backend)
+A REST API for a daily task manager, built with Node.js, Express 5 and TypeScript on PostgreSQL. Users sign in with Google OAuth 2.0 or a username/password, receive a JWT, and manage their tasks through a "today" view, an overdue ("old") view with bulk actions, and soft delete with restore. The API also includes a rule-based assignment engine that routes new tasks to worker profiles ("subagents") by type, specialization, capabilities and current load.
 
-Enterprise-grade Node.js + Express + TypeScript backend API for Daily Task Manager with Google OAuth authentication, PostgreSQL database, and comprehensive CI/CD pipeline.
+Frontend (React 18 + TypeScript + Redux Toolkit): [vivek721/daily-task-manager-frontend](https://github.com/vivek721/daily-task-manager-frontend)
 
-## 🚀 Features
+## Features
 
-- **Modern Tech Stack**: Node.js 18+, Express 5, TypeScript 5.8
-- **Authentication**: Google OAuth 2.0 + JWT tokens with Passport.js
-- **Database**: PostgreSQL 15 with connection pooling and migrations
-- **Security**: Helmet, CORS, rate limiting, input validation, and security auditing
-- **Testing**: Comprehensive test suite with Jest and Supertest
-- **Code Quality**: ESLint, Prettier, SonarCloud integration
-- **CI/CD**: Automated testing, building, security scanning, and deployment
-- **Containerization**: Docker support with multi-stage builds
-- **Monitoring**: Health checks, logging, and performance metrics
-- **Documentation**: Comprehensive API documentation and code comments
+- **Google OAuth 2.0** via Passport (`passport-google-oauth20`). On success the API signs a JWT and redirects to the frontend with it.
+- **Local accounts**: sign up and sign in with username/password; passwords hashed with bcrypt (12 rounds).
+- **JWT bearer auth** middleware that verifies the token and checks that the user still exists.
+- **Task CRUD** with priority (`low`/`medium`/`high`), due date, category and tags; list filtering by `completed`, `priority`, `category`, plus `limit`/`offset` pagination.
+- **Daily views**: today's tasks (sorted by due today, then priority), overdue tasks, and bulk actions on overdue tasks (complete all, delete all, delete completed).
+- **Soft delete**: deleted tasks can be listed, restored, or permanently removed. `scripts/cleanup-deleted-tasks.js` purges tasks soft-deleted more than a day ago.
+- **Rule-based task assignment**: when a task is created, assignment rules (`equals`, `contains`, `starts_with`, `ends_with`, `matches_regex` on task fields) are evaluated in priority order and the task is assigned to an eligible subagent. PostgreSQL triggers keep each subagent's load and busy/active status up to date.
+- **Request validation** for task payloads and task IDs (UUID format).
+- **Security middleware**: Helmet headers, CORS restricted to `FRONTEND_URL` with credentials, parameterized SQL queries throughout.
+- **Operations**: `/health` endpoint, centralized error handler, Morgan request logging, and a Docker image that runs as a non-root user with a container `HEALTHCHECK`.
 
-## 📋 Prerequisites
+## Tech stack
 
-- **Node.js** 18.x or later
-- **PostgreSQL** 15.x or later
-- **Docker** (optional, for containerized development)
-- **Google Cloud Console** account (for OAuth setup)
+| Area | Tools |
+|------|-------|
+| Runtime / framework | Node.js 18+, Express 5, TypeScript 5 (strict mode) |
+| Database | PostgreSQL via `pg` (connection pool, raw parameterized SQL) |
+| Auth | Passport + Google OAuth 2.0, `jsonwebtoken`, `bcryptjs`, `express-session` |
+| Security / logging | Helmet, CORS, Morgan |
+| Testing | Jest, ts-jest, Supertest |
+| Code quality | ESLint (`@typescript-eslint`, `eslint-plugin-security`), Prettier |
+| Delivery | Docker, GitHub Actions |
 
-## 🛠️ Installation
-
-### Local Development Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/daily-task-manager-backend.git
-   cd daily-task-manager-backend
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Environment Configuration**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration values
-   ```
-
-4. **Database Setup**
-   ```bash
-   # Create PostgreSQL database
-   createdb daily_task_manager
-   
-   # Run migrations (if available)
-   npm run migrate
-   ```
-
-5. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-### Docker Development Setup
-
-1. **Using Docker Compose** (recommended)
-   ```bash
-   docker-compose up --build
-   ```
-
-2. **Using Docker only**
-   ```bash
-   # Build image
-   npm run docker:build
-   
-   # Run container
-   npm run docker:run
-   ```
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Create a `.env` file based on `.env.example`:
-
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `NODE_ENV` | Application environment | Yes | `development` |
-| `PORT` | Server port | No | `3001` |
-| `DATABASE_URL` | PostgreSQL connection string | Yes | - |
-| `JWT_SECRET` | JWT signing secret | Yes | - |
-| `SESSION_SECRET` | Session signing secret | Yes | - |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID | Yes | - |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | Yes | - |
-| `FRONTEND_URL` | Frontend application URL | No | `http://localhost:5173` |
-
-### Google OAuth Setup
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing one
-3. Enable Google+ API
-4. Create OAuth 2.0 credentials
-5. Set authorized redirect URI: `http://localhost:3001/api/auth/google/callback`
-6. Update `.env` file with client ID and secret
-
-## 📚 API Documentation
-
-### Authentication Endpoints
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/api/auth/google` | Initiate Google OAuth | No |
-| `GET` | `/api/auth/google/callback` | OAuth callback | No |
-| `POST` | `/api/auth/verify` | Verify JWT token | No |
-| `GET` | `/api/auth/profile` | Get user profile | Yes |
-
-### Task Management Endpoints
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/api/tasks` | Get all user tasks | Yes |
-| `GET` | `/api/tasks/today` | Get today's tasks | Yes |
-| `GET` | `/api/tasks/old` | Get overdue tasks | Yes |
-| `POST` | `/api/tasks` | Create new task | Yes |
-| `PATCH` | `/api/tasks/:id/toggle` | Toggle task completion | Yes |
-| `PUT` | `/api/tasks/:id` | Update task | Yes |
-| `DELETE` | `/api/tasks/:id` | Delete task | Yes |
-
-### Health Check
-
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| `GET` | `/health` | System health status | No |
-
-## 🧪 Testing
-
-### Running Tests
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run tests with coverage
-npm run test:coverage
-
-# Run tests for CI
-npm run test:ci
-```
-
-### Test Structure
-
-```
-src/__tests__/
-├── setup.ts                 # Test configuration
-├── health.test.ts           # Health endpoint tests
-├── controllers/             # Controller tests
-│   ├── taskController.test.ts
-│   └── authController.test.ts
-├── middleware/              # Middleware tests
-│   ├── auth.test.ts
-│   └── validation.test.ts
-└── models/                  # Model tests
-    ├── Task.test.ts
-    └── User.test.ts
-```
-
-## 🏗️ Development
-
-### Code Quality
-
-```bash
-# Type checking
-npm run typecheck
-
-# Linting
-npm run lint
-npm run lint:fix
-
-# Code formatting
-npm run format
-npm run format:check
-
-# Full CI check
-npm run ci
-```
-
-### Project Structure
+## Architecture
 
 ```
 src/
-├── config/          # Configuration files
-│   ├── database.ts  # Database connection
-│   └── passport.ts  # Passport configuration
-├── controllers/     # Route handlers
-├── middleware/      # Express middleware
-├── models/          # Data models
-├── routes/          # API routes
-├── types/           # TypeScript type definitions
-├── utils/           # Utility functions
-└── index.ts         # Application entry point
+├── index.ts                 # App setup: middleware, routes, DB init, server start
+├── config/
+│   ├── database.ts          # pg Pool + creates the tasks table on startup
+│   └── passport.ts          # Google OAuth strategy, session (de)serialization
+├── routes/                  # authRoutes, taskRoutes, subagentRoutes
+├── controllers/             # Request handlers for auth, tasks, subagents
+├── models/                  # SQL data access: User, Task, Subagent
+├── middleware/              # auth (JWT), validation, errorHandler
+├── types/                   # Shared TypeScript interfaces
+└── __tests__/               # Jest tests
+scripts/cleanup-deleted-tasks.js   # Purges expired soft-deleted tasks
+init-subagents.sql                 # Subagent / assignment tables, triggers, seed data
 ```
 
-### Architecture Principles
+Layering is routes -> controllers -> models, where models are classes that run SQL against a shared `pg` pool.
 
-- **Clean Architecture**: Separation of concerns with clear boundaries
-- **Repository Pattern**: Data access abstraction
-- **Dependency Injection**: Testable and modular code
-- **Error Handling**: Comprehensive error management
-- **Security First**: Defense in depth approach
-- **Type Safety**: Full TypeScript coverage
+**Google sign-in flow**
 
-## 🚢 Deployment
+1. The frontend sends the browser to `GET /api/auth/google`.
+2. Google redirects back to `GET /api/auth/google/callback`. Passport finds or creates the user by Google ID and refreshes their name, email and picture.
+3. The API signs a JWT (`userId`, `email`, `name`; default expiry 7 days) and redirects to `${FRONTEND_URL}/auth/callback?token=<jwt>`.
+4. The frontend sends `Authorization: Bearer <jwt>` on later requests. `authenticateToken` verifies the token, loads the user, and attaches it to `req.user`.
 
-### CI/CD Pipeline
+Local sign-up and sign-in return the same kind of JWT in the JSON response.
 
-The project includes comprehensive GitHub Actions workflows:
+## API endpoints
 
-1. **Continuous Integration (`ci.yml`)**
-   - TypeScript compilation and type checking
-   - ESLint code quality checks
-   - Jest test execution with coverage
-   - Docker build validation
-   - Security scanning with CodeQL
-   - Database migration testing
+"JWT" means the endpoint needs an `Authorization: Bearer <token>` header.
 
-2. **Deployment (`deploy.yml`)**
-   - Docker image building and pushing
-   - Staging deployment
-   - Production deployment with approval
-   - Rollback capability
+### Auth (`/api/auth`)
 
-3. **Code Quality (`quality.yml`)**
-   - SonarCloud analysis
-   - Performance benchmarking
-   - Bundle size analysis
-   - Weekly quality reports
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/google` | - | Start Google OAuth |
+| GET | `/google/callback` | - | OAuth callback; redirects to frontend with JWT |
+| POST | `/signup` | - | Create a local account (`username`, `email`, `name`, `password`) and return a JWT |
+| POST | `/signin` | - | Sign in with `username` and `password` and return a JWT |
+| POST | `/verify` | Bearer token | Check a token and return its decoded user |
+| GET | `/profile` | JWT | Current user's profile |
+| POST | `/logout` | - | Ends the Passport session |
+| POST | `/dev-login` | - | Development-only test token (returns 404 when `NODE_ENV=production`) |
 
-4. **Dependency Management (`dependency-update.yml`)**
-   - Automated security audits
-   - Dependency update PRs
-   - Vulnerability notifications
+### Tasks (`/api/tasks`), all JWT
 
-### Environment Setup
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | List tasks (query: `completed`, `priority`, `category`, `limit`, `offset`) |
+| POST | `/` | Create a task (runs auto-assignment) |
+| GET | `/:id` | Get one task |
+| PUT | `/:id` | Update a task |
+| DELETE | `/:id` | Soft delete a task |
+| PATCH | `/:id/toggle` | Toggle completion |
+| PATCH | `/:id/restore` | Restore a soft-deleted task |
+| DELETE | `/:id/permanent` | Permanently delete a task |
+| GET | `/:id/history` | Change history for one task |
+| GET | `/today` | Today's tasks |
+| GET | `/old` | Overdue tasks |
+| PATCH | `/old/complete-all` | Mark all overdue tasks complete |
+| DELETE | `/old/all` | Soft delete all overdue tasks |
+| DELETE | `/old/completed` | Soft delete completed overdue tasks |
+| GET | `/deleted` | List soft-deleted tasks |
+| GET | `/expiring` | Soft-deleted tasks within 2 hours of purge |
+| GET | `/history/all` | Change history across tasks |
+| POST | `/cleanup` | Purge expired soft-deleted tasks |
 
-#### GitHub Secrets Required
+### Subagents (`/api/subagents`), no auth middleware
 
-| Secret | Description |
-|--------|-------------|
-| `SONAR_TOKEN` | SonarCloud authentication token |
-| `DOCKER_REGISTRY_TOKEN` | Container registry access token |
-| `STAGING_DEPLOY_KEY` | Staging environment deployment key |
-| `PRODUCTION_DEPLOY_KEY` | Production environment deployment key |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | List subagents |
+| POST | `/` | Create a subagent |
+| GET | `/stats` | Load and assignment statistics |
+| GET | `/:id` | Get a subagent |
+| PUT | `/:id` | Update a subagent |
+| DELETE | `/:id` | Delete a subagent |
+| GET | `/:subagentId/assignments` | A subagent's assignments |
+| POST | `/assign/:taskId/:subagentId` | Assign a task manually |
+| POST | `/auto-assign/:taskId` | Run the assignment rules for a task |
+| GET | `/assignments/task/:taskId` | A task's assignments |
+| GET | `/assignments/history` | Recent assignment history |
+| PATCH | `/assignments/:assignmentId/status` | Update an assignment's status |
+| GET | `/rules/all` | List assignment rules |
+| POST | `/rules` | Create an assignment rule |
 
-#### Branch Protection Rules
+### Health
 
-- Require status checks to pass before merging
-- Require branches to be up to date before merging
-- Require review from code owners
-- Restrict pushes to matching branches
-- Require signed commits (recommended)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/health` | - | Returns `success`, `message`, `timestamp`, `environment` |
 
-## 📊 Monitoring & Observability
+## Getting started
 
-### Health Checks
+### Prerequisites
 
-The application includes comprehensive health checks:
+- Node.js 18 or later
+- PostgreSQL 13 or later (the schema uses the built-in `gen_random_uuid()`)
+- A Google Cloud project with an OAuth 2.0 client (only needed for Google sign-in)
+
+### 1. Install
 
 ```bash
+git clone https://github.com/vivek721/daily-task-manager-backend.git
+cd daily-task-manager-backend
+npm install
+cp .env.example .env
+```
+
+### 2. Configure environment variables
+
+These are the variables the code reads:
+
+| Variable | Used for | Default if unset |
+|----------|----------|------------------|
+| `PORT` | HTTP port | `3001` |
+| `NODE_ENV` | `production` makes session cookies secure and disables `/dev-login`; `development` adds stack traces to error responses | `development` |
+| `FRONTEND_URL` | CORS origin and OAuth redirect target | `http://localhost:5173` for CORS; OAuth redirects need it set |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | PostgreSQL connection used by the API | `localhost`, `5432`, `daily_task_manager`, `postgres`, `password` |
+| `DATABASE_URL` | Used only by `scripts/cleanup-deleted-tasks.js` (falls back to the `DB_*` values) | - |
+| `JWT_SECRET` | Signing and verifying JWTs | **required** |
+| `JWT_EXPIRE` | JWT lifetime | `7d` |
+| `SESSION_SECRET` | express-session signing | insecure placeholder, so always set it |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth client | **required** (the Google strategy is registered at startup) |
+| `GOOGLE_CALLBACK_URL` | OAuth callback URL | `/api/auth/google/callback` |
+
+`.env.example` also lists `BCRYPT_ROUNDS`, `JWT_EXPIRES_IN`, `RATE_LIMIT_*`, `LOG_LEVEL` and `LOG_FORMAT`. The code does not read them yet. Use `JWT_EXPIRE`, not `JWT_EXPIRES_IN`, to change token lifetime.
+
+### 3. Set up Google OAuth
+
+1. In the [Google Cloud Console](https://console.cloud.google.com/), open **APIs & Services -> OAuth consent screen** and configure it. Add your account as a test user while the app is in testing.
+2. Go to **Credentials -> Create credentials -> OAuth client ID** and choose **Web application**.
+3. Add the authorized redirect URI `http://localhost:3001/api/auth/google/callback`, or your own `GOOGLE_CALLBACK_URL`.
+4. Copy the client ID and secret into `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+5. Set `FRONTEND_URL` to the frontend origin. The frontend must handle the `/auth/callback?token=...` route.
+
+### 4. Set up the database
+
+```bash
+createdb daily_task_manager
+```
+
+On startup, the API creates the `tasks` table (with indexes and an `updated_at` trigger) if it does not exist. Some objects are **not** created automatically, so set these up before using the related endpoints:
+
+- a `users` table with the columns in `src/models/User.ts`: `id` UUID, `google_id`, `email`, `name`, `picture`, `username`, `password_hash`, `auth_type`, `created_at`, `updated_at`, `last_login`
+- `user_id` and `deleted_at` columns on `tasks`
+- the `get_task_history()` and `cleanup_expired_deleted_tasks()` functions and the `expiring_deleted_tasks` view, which the history, cleanup and expiring endpoints use
+- the subagent tables: run `psql -d daily_task_manager -f init-subagents.sql` **after** the API has started once, because the script depends on `tasks` and `update_updated_at_column()`
+
+### 5. Run
+
+| Script | What it does |
+|--------|--------------|
+| `npm run dev` | Start with nodemon + ts-node |
+| `npm run build` | Clean `dist/` and compile TypeScript |
+| `npm start` | Run the compiled app (`dist/index.js`) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` / `npm run lint:fix` | ESLint on `src/**/*.ts` |
+| `npm run format` / `npm run format:check` | Prettier |
+| `npm test` / `npm run test:watch` / `npm run test:coverage` / `npm run test:ci` | Jest |
+| `npm run ci` | typecheck, lint, test:ci, build |
+| `npm run docker:build` / `npm run docker:run` | Build and run the Docker image |
+
+```bash
+npm run dev
 curl http://localhost:3001/health
 ```
 
-Response:
-```json
-{
-  "success": true,
-  "message": "Daily Task Manager API is running",
-  "timestamp": "2025-01-20T10:30:00.000Z",
-  "environment": "production"
-}
+`package.json` also defines `migrate` and `seed` scripts, but the files they point to (`dist/scripts/migrate.js`, `dist/scripts/seed.js`) are not in the repo, so these scripts don't work yet.
+
+### Docker
+
+The `Dockerfile` uses `node:18-alpine`. It compiles the TypeScript, prunes dev dependencies, runs as a non-root `nodejs` user, exposes port 3001 and defines a `HEALTHCHECK` that calls `/health`. There is no Compose file and no bundled database, so point the container at your own PostgreSQL:
+
+```bash
+npm run docker:build
+docker run --env-file .env -p 3001:3001 daily-task-manager-backend
+# If Postgres runs on the host, set DB_HOST=host.docker.internal in .env
 ```
 
-### Logging
+## Tests
 
-- **Morgan**: HTTP request logging
-- **Console**: Application logging with levels
-- **Error Tracking**: Unhandled rejection and exception handling
+Jest + ts-jest with Supertest. `src/__tests__/setup.ts` loads `.env.test`.
 
-### Performance Monitoring
+```
+src/__tests__/
+├── setup.ts
+├── health.test.ts                  # /health response shape
+└── controllers/taskController.test.ts  # getAllTasks / getTodaysTasks with a mocked TaskModel
+```
 
-- Database connection pooling metrics
-- Request/response time tracking
-- Memory usage monitoring
-- Error rate tracking
+Coverage is small so far. `jest.config.js` sets an 80% global coverage threshold, which the current suite is unlikely to meet.
 
-## 🔒 Security
+## CI / GitHub Actions
 
-### Implemented Security Measures
+Workflows in `.github/workflows/`:
 
-- **Authentication**: Google OAuth 2.0 + JWT
-- **Authorization**: Route-level access control
-- **Input Validation**: Comprehensive request validation
-- **Security Headers**: Helmet.js configuration
-- **CORS**: Controlled cross-origin requests
-- **Rate Limiting**: Request throttling
-- **SQL Injection Prevention**: Parameterized queries
-- **XSS Protection**: Input sanitization
-- **Security Auditing**: Regular dependency scanning
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| `ci.yml` (Continuous Integration) | push / PR to `main`, `develop` | Typecheck + build, ESLint + Prettier check, Jest against a Postgres 15 service (uploads coverage to Codecov), Docker build + `/health` smoke test, `npm audit` + CodeQL, SQL init-script check |
+| `deploy.yml` (Deploy to Production) | push to `main`, `v*` tags, manual | Builds a multi-arch image and pushes it to GHCR. The staging and production deploy steps are placeholders. |
+| `quality.yml` (Code Quality & Performance) | push / PR to `main`, `develop`, weekly | SonarCloud scan (needs `SONAR_TOKEN` and a SonarCloud org), Artillery load test of `/health`, complexity and build-size reports |
+| `dependency-update.yml` (Dependency Updates) | weekly, manual | `npm audit` / `npm outdated` report. When started manually, it opens a PR with minor dependency updates. |
 
-### Security Best Practices
+The default branch is `master`, but the push/PR workflows target `main`/`develop`, so `ci.yml` and `deploy.yml` have not run yet.
 
-1. Keep dependencies updated
-2. Use environment variables for secrets
-3. Implement proper error handling
-4. Regular security audits
-5. Follow principle of least privilege
-6. Use HTTPS in production
-7. Implement proper session management
+## Known limitations
 
-## 🤝 Contributing
+- The database schema is only partly bootstrapped by the app (see [Set up the database](#4-set-up-the-database)), and there is no migration tool yet.
+- Ownership checks are not applied consistently. List, create and today's views are scoped to the signed-in user. Get-by-id and toggle only match tasks with no owner. Update, delete, restore, the overdue bulk actions, and the deleted/history endpoints are not filtered by user.
+- `/api/subagents` routes have no authentication.
+- `/dev-login` issues a token for a user ID that does not exist in `users`, so `authenticateToken` rejects it.
+- There is no rate limiting.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## Roadmap (not yet built)
 
-### Development Guidelines
+- Migrations for the full schema (users, soft delete, history functions)
+- Consistent per-user authorization on every task endpoint, and auth on subagent routes
+- Rate limiting and use of the `BCRYPT_ROUNDS` / logging settings from `.env.example`
+- Broader test coverage (auth, validation, models) and CI running on `master`
 
-- Follow TypeScript best practices
-- Write comprehensive tests
-- Update documentation
-- Follow conventional commit messages
-- Ensure all CI checks pass
+## License
 
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/your-username/daily-task-manager-backend/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-username/daily-task-manager-backend/discussions)
-- **Documentation**: [Wiki](https://github.com/your-username/daily-task-manager-backend/wiki)
-
-## 🎯 Roadmap
-
-- [ ] GraphQL API implementation
-- [ ] Real-time notifications with WebSockets
-- [ ] Advanced task analytics
-- [ ] Multi-tenant support
-- [ ] Mobile app API extensions
-- [ ] Advanced caching with Redis
-- [ ] Microservices architecture migration
-
----
-
-**Built with ❤️ by the Daily Task Manager Team**
+MIT. See [LICENSE](LICENSE).
